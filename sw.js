@@ -6,7 +6,7 @@
    - skipWaiting so a fixing SW takes over immediately
    - vendor cache (MediaPipe engine + models + fonts) cache-first, so scanning works offline after the first load
    BUMP VERSION ON EVERY RELEASE. */
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const APP_CACHE = 'xraycam-app-' + VERSION;
 const VENDOR_CACHE = 'xraycam-vendor-v1';   // pinned library/model URLs → stable across app versions
 const SHELL = ['./', './index.html', './manifest.json', './privacy_policy.html', './icon-192.png', './icon-512.png'];

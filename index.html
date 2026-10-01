@@ -389,6 +389,7 @@ let level = 0, running = false, demo = false, facing = 'environment';
 let stream = null, landmarker = null, raf = 0, lastVT = -1, lastTs = 0;
 let winFrac = 0.62, winCY = 0.47;
 let lm = null, lmSeen = 0, maskReady = false, maskFromSeg = false;
+let poseStreak = 0, poseRejected = false, bigHandAt = 0, lastF = null;
 let FW = 1, FH = 1, hands = [], handLandmarker = null, demoScene = 'body', frameIdx = 0, hintText = '';
 let fpsAcc = 0, fpsN = 0, fpsT = performance.now(), lowFx = false, slowFrames = 0;
 
@@ -1274,13 +1275,14 @@ function maskFromFloat(arr, w, h) {
 }
 const MC = 'rgb(150,210,255)';
 function buildMask(W, Hh, F) {
-  if (demo || !maskFromSeg) {
+  const useSeg = !demo && maskFromSeg && !poseRejected;
+  if (!useSeg) {
     if (mask.width !== W || mask.height !== Hh) { mask.width = W; mask.height = Hh; maskImg = null; }
     mctx.clearRect(0, 0, W, Hh);
     if (F) paintSilhouette(mctx, F, MC, MC, MC, MC);
   }
   if (hands.length) { mctx.save(); mctx.scale(mask.width / W, mask.height / Hh); for (const h of hands) paintHandMask(mctx, h, MC); mctx.restore(); }
-  maskReady = (!demo && maskFromSeg) || !!F || hands.length > 0;
+  maskReady = useSeg || !!F || hands.length > 0;
 }
 function paintSilhouette(c, F, shirt, pants, skin, hair) {
   const {S} = F;
@@ -1404,7 +1406,7 @@ async function loadModel() {
     catch (e) { console.warn('GPU failed, CPU fallback', e); return await Cls.createFromOptions(fileset, {...opts, baseOptions: {...opts.baseOptions, delegate: 'CPU'}}); }
   };
   try { landmarker = await make(PoseLandmarker, {baseOptions: {modelAssetPath: MODEL_URL}, runningMode: 'VIDEO', numPoses: 1,
-    outputSegmentationMasks: true, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .5, minTrackingConfidence: .5}); }
+    outputSegmentationMasks: true, minPoseDetectionConfidence: .65, minPosePresenceConfidence: .65, minTrackingConfidence: .6}); }
   catch (e) { console.warn('pose model failed', e); }
   try { handLandmarker = await make(HandLandmarker, {baseOptions: {modelAssetPath: HAND_URL}, runningMode: 'VIDEO', numHands: 2,
     minHandDetectionConfidence: .5, minHandPresenceConfidence: .5, minTrackingConfidence: .5}); }
@@ -1437,6 +1439,7 @@ function detect(W, Hh) {
     try {
       landmarker.detectForVideo(video, ts, res => {
         const raw = res.landmarks && res.landmarks[0];
+        poseStreak = raw ? poseStreak + 1 : 0;
         if (raw) {
           const next = raw.map(p => ({x: p.x * W, y: p.y * Hh, v: p.visibility ?? 1}));
           if (lm && lm.length === next.length) {
@@ -1474,7 +1477,20 @@ function loop() {
   }
   FW = W; FH = Hh;
   sizeAll(W, Hh);
-  const F = lm ? frames() : null;
+  let F = lm && (demo || poseStreak >= 4) ? frames() : null;
+  // sanity check between engines: a real palm is ~1/4 of the same person's shoulder width.
+  // A "body" whose shoulders are about the size of a visible hand is the body engine imagining
+  // a tiny person inside a close-up hand → reject it (and its body mask).
+  poseRejected = false;
+  if (!demo) {
+    const now = performance.now();
+    let maxPalm = 0;
+    for (const h of hands) maxPalm = Math.max(maxPalm, len(sub(h.pts[9], h.pts[0])));
+    if (maxPalm > Math.min(W, Hh) * .12) bigHandAt = now;            // a close-up hand is in view
+    if (F && (maxPalm > F.S * .55 || (now - bigHandAt < 900 && !hands.length))) { F = null; poseRejected = true; }
+    if (!F && lm && hands.length) poseRejected = true;
+  }
+  lastF = F;
   buildMask(W, Hh, F);
   composeXray(src, W, Hh, F, time);
   drawView(src, W, Hh, time, F);
@@ -1486,7 +1502,7 @@ function loop() {
   if (slowFrames > 40 && !lowFx && SET.perf === 'auto') { lowFx = true; console.info('low-fx mode on'); }
   if (t0 - fpsT > 1000) {
     $('hFps').textContent = fpsN + (lowFx ? ' ·LITE' : ''); fpsN = 0; fpsT = t0;
-    const hb = $('hBody'), on = !!(lm || hands.length); hb.textContent = lm && hands.length ? 'BODY+HAND' : lm ? 'BODY' : hands.length ? 'HAND×' + hands.length : 'SEARCHING'; hb.className = on ? 'ok' : 'no';
+    const hb = $('hBody'), on = !!(lastF || hands.length); hb.textContent = lastF && hands.length ? 'BODY+HAND' : lastF ? 'BODY' : hands.length ? 'HAND×' + hands.length : 'SEARCHING'; hb.className = on ? 'ok' : 'no';
   }
   raf = requestAnimationFrame(loop);
 }
@@ -1495,7 +1511,7 @@ function loop() {
 /* =====================================================================
    APPNEST SHELL — i18n · settings · gallery (IndexedDB) · navigation
    ===================================================================== */
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const APP_ID = 'xraycam';
 
 /* ---------------- i18n (he / en) ---------------- */
