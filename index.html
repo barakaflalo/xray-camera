@@ -56,7 +56,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
   background:rgba(0,8,18,.45);padding:6px 10px;border-radius:8px;border:1px solid rgba(127,231,255,.15)}
 .hud .ok{color:#6dffb0}.hud .no{color:var(--warn)}
 .demoTag{position:absolute;top:calc(env(safe-area-inset-top) + 64px);left:12px;z-index:5;font-size:11px;color:var(--warn);border:1px solid rgba(255,211,107,.5);background:rgba(40,30,0,.5);padding:4px 10px;border-radius:8px;display:none}
-.demoTag.on{display:block}
+.demoTag.on{display:block;cursor:pointer}
 
 .bottom{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);
   background:linear-gradient(0deg,rgba(0,6,14,.96) 55%,transparent)}
@@ -93,15 +93,18 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
     </svg>
   </div>
   <h1>X·RAY CAM</h1>
-  <div class="sub">כוונו את המצלמה אל בן אדם — והמצלמה "תראה" דרכו. בחרו באיזו שכבה להתחיל:</div>
+  <div class="sub">כוונו את המצלמה אל יד, אל פלג גוף או אל בן אדם שלם — והמצלמה "תראה" רק את מה שבפריים. בחרו באיזו שכבה להתחיל:</div>
   <div class="tiles">
     <button class="tile" data-l="0"><span class="ic">🦴</span><b>שלד</b><small>רנטגן קלאסי</small></button>
     <button class="tile" data-l="1"><span class="ic">💪</span><b>שרירים</b><small>סיבי שריר</small></button>
     <button class="tile" data-l="2"><span class="ic">🫁</span><b>איברים</b><small>ריאות, לב, מעיים</small></button>
     <button class="tile" data-l="3"><span class="ic">🩸</span><b>כלי דם</b><small>עורקים וורידים</small></button>
   </div>
-  <button class="demoBtn" id="demoBtn">🎭 מצב דמו — בלי מצלמה</button>
-  <div class="note">הזיהוי רץ כולו על המכשיר, שום תמונה לא נשלחת לשום מקום. בפעם הראשונה נטען מנוע הזיהוי (כ-15MB), אז צריך אינטרנט.<br>לתוצאה הכי טובה: תאורה טובה, ורוב הגוף בתוך הפריים.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+    <button class="demoBtn" id="demoBtn">🎭 דמו — גוף</button>
+    <button class="demoBtn" id="demoHandBtn">✋ דמו — יד</button>
+  </div>
+  <div class="note">הזיהוי רץ כולו על המכשיר, שום תמונה לא נשלחת לשום מקום. בפעם הראשונה נטענים מנועי הזיהוי של הגוף והיד (כ-25MB), אז צריך אינטרנט.<br>לתוצאה הכי טובה: תאורה טובה, ורוב הגוף בתוך הפריים.</div>
 </section>
 
 <!-- ============ CAMERA ============ -->
@@ -120,7 +123,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
     <div>BODY: <span id="hBody" class="no">SEARCHING</span></div>
     <div>FPS: <span id="hFps">--</span></div>
   </div>
-  <div class="demoTag" id="demoTag">🎭 מצב דמו</div>
+  <div class="demoTag" id="demoTag" title="החלף סצנה">🎭 מצב דמו</div>
 
   <div class="bottom">
     <div class="levels" id="levels">
@@ -151,6 +154,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
    ===================================================================== */
 const MP_VER = '1.0.1';
 const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`;
+const HAND_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
 const LEVELS = [
@@ -168,6 +172,7 @@ let level = 0, running = false, demo = false, facing = 'environment';
 let stream = null, landmarker = null, raf = 0, lastVT = -1, lastTs = 0;
 let winFrac = 0.62, winCY = 0.47;
 let lm = null, lmSeen = 0, maskReady = false, maskFromSeg = false;
+let FW = 1, FH = 1, hands = [], handLandmarker = null, demoScene = 'body', frameIdx = 0, hintText = '';
 let fpsAcc = 0, fpsN = 0, fpsT = performance.now(), lowFx = false, slowFrames = 0;
 
 // work canvases (in source-pixel space)
@@ -224,43 +229,70 @@ function seg(A, B, S) {
 /* =====================================================================
    POSE → anatomical frames
    ===================================================================== */
-const VIS = 0.45;
-function P(i) { return lm && lm[i] && lm[i].v > VIS ? lm[i] : null; }
-function Pa(i) { return lm && lm[i] ? lm[i] : null; } // any visibility
+const VIS = 0.6;
+// a landmark counts only if the model is confident it is visible AND it is inside the frame
+function inF(p, m = .03) { return p.x > -FW * m && p.x < FW * (1 + m) && p.y > -FH * m && p.y < FH * (1 + m); }
+function P(i) { const p = lm && lm[i]; return p && p.v > VIS && (inF(p) || (p.v > .8 && inF(p, .35))) ? p : null; }
+function Pa(i) { return lm && lm[i] ? lm[i] : null; } // model's guess (may be off-screen)
+function handNear(Wp) { return hands.some(h => len(sub(h.pts[0], Wp)) < len(sub(h.pts[9], h.pts[0])) * 1.3); }
 
 function frames() {
-  const Ls = Pa(11), Rs = Pa(12), Lh = Pa(23), Rh = Pa(24);
-  if (!Ls || !Rs || !Lh || !Rh) return null;
-  const sm = lerp(Ls, Rs, .5), hm = lerp(Lh, Rh, .5);
-  const torsoLen = len(sub(hm, sm));
-  const S = Math.max(len(sub(Ls, Rs)), torsoLen * 0.62, 12);
-  // torso frame: u from -1 (person's right) to +1 (person's left), v 0=shoulders 1=hips
-  const hs = mul(sub(Ls, Rs), .5 * .78);
-  let hh = mul(sub(Lh, Rh), .5 * 1.28);
-  if (len(hh) < len(hs) * .55) hh = mul(nrm(hh.x || hh.y ? hh : hs), len(hs) * .8);
-  const T = (u, v) => lerp(add(sm, mul(hs, u)), add(hm, mul(hh, u)), v);
-  const down = nrm(sub(hm, sm));
-  // pelvis frame
-  const hx = mul(sub(Lh, Rh), .5); const hw = Math.max(len(hx), S * .28);
-  const hxu = nrm(hx);
-  let hd = perp(hxu); if (dot(hd, down) < 0) hd = mul(hd, -1);
-  const Pv = (x, y) => add(add(hm, mul(hxu, x * hw)), mul(hd, y * hw));
-  // head frame
-  const eL = Pa(7), eR = Pa(8), nose = Pa(0);
-  let hc, hW, up;
-  if (eL && eR) { hc = lerp(eL, eR, .5); hW = Math.max(len(sub(eL, eR)), S * .34); }
-  else if (nose) { hc = nose; hW = S * .38; }
-  else { hc = sub(sm, mul(down, S * .75)); hW = S * .38; }
-  const eyeL = Pa(2), eyeR = Pa(5), mL = Pa(9), mR = Pa(10);
-  if (eyeL && eyeR && mL && mR) up = nrm(sub(lerp(eyeL, eyeR, .5), lerp(mL, mR, .5)));
-  else up = mul(down, -1);
-  // blend head-up with torso-up for stability
-  up = nrm(add(mul(up, .7), mul(down, -.3)));
-  let rt = perp(up); if (dot(rt, sub(Ls, Rs)) < 0) rt = mul(rt, -1); // rt points to person's left
-  const face = nose ? clamp(dot(sub(nose, hc), rt) / hW, -.45, .45) : 0;
-  const H = (x, y) => add(add(hc, mul(rt, x * hW)), mul(up, y * hW));
-  const neckTop = H(0, -.42);
-  return {S, sm, hm, T, down, Pv, hw, hxu, hd, H, hW, face, neckTop, Ls, Rs, Lh, Rh};
+  if (!lm) return null;
+  const dist = (a, b) => { const A = P(a), B = P(b); return A && B ? len(sub(A, B)) : 0; };
+  const S = Math.max(dist(11, 12), dist(11, 13) * 1.3, dist(12, 14) * 1.3, dist(13, 15) * 1.45, dist(14, 16) * 1.45,
+    dist(23, 25) * .95, dist(24, 26) * .95, dist(25, 27) * 1.05, dist(26, 28) * 1.05, dist(23, 24) * 1.45, dist(7, 8) * 2.6, dist(2, 5) * 5);
+  if (S < 12) return null;
+  const vis = []; for (let i = 0; i < 33; i++) { const p = P(i); if (p) vis.push(p); }
+  if (vis.length < 2) return null;
+  const center = mul(vis.reduce((a, p) => add(a, p), V(0, 0)), 1 / vis.length);
+  const Ls = P(11), Rs = P(12), Lh = P(23), Rh = P(24);
+  const F = {S, center, torso: false, pelvis: false, head: false, Ls, Rs, Lh, Rh};
+  // ---- torso (needs both shoulders really visible) ----
+  if (Ls && Rs) {
+    const sm = lerp(Ls, Rs, .5), shW = len(sub(Ls, Rs));
+    const gL = Lh || Pa(23), gR = Rh || Pa(24);
+    let hm = gL && gR ? lerp(gL, gR, .5) : null;
+    let dg = perp(nrm(sub(Ls, Rs)));
+    const nose = P(0);
+    if (nose) { if (dot(dg, sub(sm, nose)) < 0) dg = mul(dg, -1); }
+    else if (hm && dot(dg, sub(hm, sm)) < 0) dg = mul(dg, -1);
+    if (!hm || len(sub(hm, sm)) < shW * .8 || len(sub(hm, sm)) > shW * 2.8) hm = add(sm, mul(dg, shW * 1.55));
+    const hs = mul(sub(Ls, Rs), .5 * .78);
+    let hh = gL && gR ? mul(sub(gL, gR), .5 * 1.28) : mul(hs, 1);
+    if (len(hh) < len(hs) * .55) hh = mul(nrm(hs), len(hs) * .85);
+    if (dot(hh, hs) < 0) hh = mul(hh, -1);
+    F.T = (u, v) => lerp(add(sm, mul(hs, u)), add(hm, mul(hh, u)), v);
+    F.sm = sm; F.hm = hm; F.down = nrm(sub(hm, sm)); F.torso = true;
+  }
+  // ---- pelvis (needs both hips really visible) ----
+  if (Lh && Rh) {
+    const hm = lerp(Lh, Rh, .5), hx = mul(sub(Lh, Rh), .5), hw = Math.max(len(hx), S * .28), hxu = nrm(hx);
+    let hd = perp(hxu);
+    const K1 = P(25), K2 = P(26);
+    const ref = F.torso ? F.down : (K1 && K2 ? sub(lerp(K1, K2, .5), hm) : (K1 || K2) ? sub(K1 || K2, hm) : V(0, 1));
+    if (dot(hd, ref) < 0) hd = mul(hd, -1);
+    F.Pv = (x, y) => add(add(hm, mul(hxu, x * hw)), mul(hd, y * hw));
+    F.hw = hw; F.hxu = hxu; F.hd = hd; F.hmP = hm; F.pelvis = true;
+    if (!F.down) F.down = hd;
+  }
+  // ---- head (needs nose + both eyes) ----
+  const nose = P(0), eyeL = P(2), eyeR = P(5);
+  if (nose && eyeL && eyeR) {
+    const eL = P(7), eR = P(8), eyeD = len(sub(eyeL, eyeR));
+    let hc, hW;
+    if (eL && eR) { hc = lerp(eL, eR, .5); hW = Math.max(len(sub(eL, eR)), eyeD * 1.9); }
+    else { hc = lerp(lerp(eyeL, eyeR, .5), nose, .25); hW = eyeD * 2.1; }
+    const mL = P(9), mR = P(10);
+    let up = mL && mR ? nrm(sub(lerp(eyeL, eyeR, .5), lerp(mL, mR, .5))) : F.down ? mul(F.down, -1) : nrm(sub(lerp(eyeL, eyeR, .5), nose));
+    if (F.down) up = nrm(add(mul(up, .7), mul(F.down, -.3)));
+    let rt = perp(up); if (dot(rt, sub(eyeL, eyeR)) < 0) rt = mul(rt, -1);
+    F.face = clamp(dot(sub(nose, hc), rt) / hW, -.45, .45);
+    F.H = (x, y) => add(add(hc, mul(rt, x * hW)), mul(up, y * hW));
+    F.hW = hW; F.head = true; F.neckTop = F.H(0, -.42);
+    if (!F.down) F.down = mul(up, -1);
+  }
+  if (!F.down) F.down = V(0, 1);
+  return F;
 }
 
 /* =====================================================================
@@ -347,7 +379,7 @@ function vertebra(c, p, dir, w, h) {
 }
 
 function drawSpine(c, F, a = 1) {
-  const {T, S, neckTop} = F;
+  const {T, S} = F, neckTop = F.head ? F.neckTop : T(0, -.28);
   boneStyle(c, S, a);
   const pts = [neckTop, T(0, .02), T(0, .32), T(0, .62), T(0, .9)];
   // sample along polyline
@@ -423,16 +455,17 @@ function drawPelvis(c, F, a = 1) {
 function drawArm(c, F, side) {
   const {S} = F;
   const [sh, el, wr, pk, ix, th] = side > 0 ? [11, 13, 15, 17, 19, 21] : [12, 14, 16, 18, 20, 22];
-  const A = Pa(sh), B = P(el), W = P(wr);
-  if (!A || !B) return;
+  const A = P(sh), B = P(el), W = P(wr);
   boneStyle(c, S);
-  circleBone(c, A, S * .085);
-  longBone(c, A, B, S, {w: .042, p0: .08, p1: .085});
-  if (!W) return;
-  const f = seg(B, W, S), out = dot(perp(nrm(sub(W, B))), sub(B, F.sm)) > 0 ? 1 : -1;
-  longBone(c, f(out * .03, -.04), f(out * .045, 1), S, {w: .022, p0: .028, p1: .05});   // radius
-  longBone(c, f(-out * .035, -.1), f(-out * .03, .98), S, {w: .02, p0: .045, p1: .026}); // ulna
-  drawHand(c, S, W, P(pk), P(ix), P(th), sub(W, B));
+  if (A && F.torso) circleBone(c, A, S * .085);
+  if (A && B) longBone(c, A, B, S, {w: .042, p0: .08, p1: .085});
+  if (B && W) {
+    const f = seg(B, W, S), out = dot(perp(nrm(sub(W, B))), sub(B, F.sm || F.center)) > 0 ? 1 : -1;
+    longBone(c, f(out * .03, -.04), f(out * .045, 1), S, {w: .022, p0: .028, p1: .05});   // radius
+    longBone(c, f(-out * .035, -.1), f(-out * .03, .98), S, {w: .02, p0: .045, p1: .026}); // ulna
+  }
+  // rough hand from the body model only when the dedicated hand model doesn't see this hand
+  if (W && B && P(pk) && P(ix) && !handNear(W)) drawHand(c, S, W, P(pk), P(ix), P(th), sub(W, B));
 }
 
 function drawHand(c, S, W, pk, ix, th, fdir) {
@@ -464,24 +497,30 @@ function drawHand(c, S, W, pk, ix, th, fdir) {
 }
 
 function drawLeg(c, F, side) {
-  const {S, hxu, hw, hd} = F;
+  const {S} = F;
   const [hp, kn, an, he, ft] = side > 0 ? [23, 25, 27, 29, 31] : [24, 26, 28, 30, 32];
-  const Hj = Pa(hp), K = P(kn), A = P(an);
-  if (!Hj || !K) return;
+  const Hj = P(hp), K = P(kn), A = P(an);
   boneStyle(c, S);
-  const out = mul(hxu, side * hw);
-  const G = add(add(Hj, mul(out, .38)), mul(hd, hw * .18));   // greater trochanter
-  circleBone(c, Hj, S * .075);
-  fillBone(c, [...[0, .5, 1].map(t => add(lerp(Hj, G, t), mul(perp(nrm(sub(G, Hj))), -S * .04))), ...[1, .5, 0].map(t => add(lerp(Hj, G, t), mul(perp(nrm(sub(G, Hj))), S * .04)))]);
-  longBone(c, lerp(Hj, G, .6), K, S, {w: .05, p0: .09, p1: .11, e0: .02});
-  // patella
-  c.save(); c.globalAlpha = .85; smoothPath(c, ellipsePts((x, y) => V(x, y), K.x, K.y, S * .055, S * .065, 14)); c.fill(); c.stroke(); c.restore();
-  if (!A) return;
-  const f = seg(K, A, S), o = dot(perp(nrm(sub(A, K))), out) > 0 ? 1 : -1;
-  longBone(c, f(-o * .012, .02), f(-o * .01, 1), S, {w: .042, p0: .1, p1: .06});      // tibia
-  longBone(c, f(o * .075, .06), f(o * .06, 1.03), S, {w: .016, p0: .03, p1: .032});   // fibula
+  let G = null;
+  if (Hj && F.pelvis) {
+    const out = mul(F.hxu, side * F.hw);
+    G = add(add(Hj, mul(out, .38)), mul(F.hd, F.hw * .18));   // greater trochanter
+    circleBone(c, Hj, S * .075);
+    const n = perp(nrm(sub(G, Hj)));
+    fillBone(c, [...[0, .5, 1].map(t => add(lerp(Hj, G, t), mul(n, -S * .04))), ...[1, .5, 0].map(t => add(lerp(Hj, G, t), mul(n, S * .04)))]);
+  }
+  if (Hj && K) {
+    longBone(c, G ? lerp(Hj, G, .6) : Hj, K, S, {w: .05, p0: .09, p1: .11, e0: .02});
+  }
+  if (K && (Hj || A)) { c.save(); c.globalAlpha = .85; smoothPath(c, ellipsePts((x, y) => V(x, y), K.x, K.y, S * .055, S * .065, 14)); c.fill(); c.stroke(); c.restore(); }
+  if (K && A) {
+    const outV = F.pelvis ? mul(F.hxu, side) : sub(K, F.center);
+    const f = seg(K, A, S), o = dot(perp(nrm(sub(A, K))), outV) > 0 ? 1 : -1;
+    longBone(c, f(-o * .012, .02), f(-o * .01, 1), S, {w: .042, p0: .1, p1: .06});      // tibia
+    longBone(c, f(o * .075, .06), f(o * .06, 1.03), S, {w: .016, p0: .03, p1: .032});   // fibula
+  }
   const Hl = P(he), Tt = P(ft);
-  if (Hl && Tt) {
+  if (A && Hl && Tt) {
     circleBone(c, A, S * .045);
     longBone(c, Hl, lerp(Hl, A, .75), S, {w: .045, p0: .05, p1: .045, noCore: true}); // calcaneus
     const fd = nrm(sub(Tt, A)), fp = perp(fd), fl = len(sub(Tt, A));
@@ -493,15 +532,13 @@ function drawLeg(c, F, side) {
   }
 }
 
-function drawSkeleton(c, F, a = 1, parts = 'all') {
+function drawSkeleton(c, F, a = 1) {
   c.save(); c.globalAlpha = a;
-  if (parts === 'all' || parts === 'trunk') { drawPelvis(c, F); drawSpine(c, F); drawRibcage(c, F); }
-  if (parts === 'all') {
-    drawLeg(c, F, 1); drawLeg(c, F, -1);
-    drawArm(c, F, 1); drawArm(c, F, -1);
-    drawSkull(c, F);
-  }
-  if (parts === 'trunk') drawSkull(c, F);
+  if (F.pelvis) drawPelvis(c, F);
+  if (F.torso) { drawSpine(c, F); drawRibcage(c, F); }
+  drawLeg(c, F, 1); drawLeg(c, F, -1);
+  drawArm(c, F, 1); drawArm(c, F, -1);
+  if (F.head) drawSkull(c, F);
   c.restore();
 }
 
@@ -533,8 +570,9 @@ function tendon(c, S, p, q, w = .012) { c.strokeStyle = 'rgba(240,226,205,.9)'; 
 function outSign(A, B, ref) { return dot(perp(nrm(sub(B, A))), sub(A, ref)) > 0 ? 1 : -1; }
 
 function drawMuscles(c, F) {
-  const {T, S, H, sm, neckTop} = F;
-  // neck & trapezius
+  const {S} = F, sm = F.sm || F.center;
+  if (F.torso) { const {T} = F;
+  if (F.head) { const {H, neckTop} = F;
   for (const [s, sh] of [[-1, F.Rs], [1, F.Ls]]) {
     const tp = [neckTop, H(s * .3, -.55), lerp(sh, H(s * .3, -.55), .35), sh, T(s * .55, .1), T(s * .12, .16)];
     musclePaint(c, tp, S, null);
@@ -544,6 +582,7 @@ function drawMuscles(c, F) {
     for (let i = 0; i <= 8; i++) scm.push(f(-.035 * Math.sin(Math.PI * i / 8) - .01, i / 8));
     for (let i = 8; i >= 0; i--) scm.push(f(.035 * Math.sin(Math.PI * i / 8) + .01, i / 8));
     musclePaint(c, scm, S, f, -.03, .03, 0, 1, 3);
+  }
   }
   // pectorals
   for (const [s, sh] of [[-1, F.Rs], [1, F.Ls]]) {
@@ -572,30 +611,33 @@ function drawMuscles(c, F) {
   }
   // linea alba
   c.strokeStyle = 'rgba(240,226,205,.8)'; c.lineWidth = S * .012; strokeLine(c, [T(0, .42), T(0, 1.0)]);
-
+  }
   // arms
   for (const side of [1, -1]) {
     const [sh, el, wr] = side > 0 ? [11, 13, 15] : [12, 14, 16];
-    const A = Pa(sh), B = P(el), W = P(wr);
-    if (!A || !B) continue;
+    const A = P(sh), B = P(el), W = P(wr);
+    if (A && B) {
     const o = outSign(A, B, sm);
     spindle(c, S, A, B, o * .05, .085, .05, .92, 4);     // triceps (outer)
     spindle(c, S, A, B, -o * .01, .095, .12, .86, 5);    // biceps
     spindle(c, S, A, B, o * .03, .135, -.14, .46, 6);    // deltoid
-    if (W) {
+    }
+    if (B && W) {
+      const o = outSign(B, W, sm);
       const f = seg(B, W, S);
       spindle(c, S, B, W, o * .035, .07, -.05, .62, 4);  // brachioradialis
       spindle(c, S, B, W, -o * .03, .06, .02, .7, 4);    // flexors
       for (const x of [-.03, 0, .03]) tendon(c, S, f(x, .66), f(x * .7, .98), .008);
-      c.fillStyle = 'rgba(230,120,100,.8)'; c.beginPath(); c.arc(W.x, W.y, S * .06, 0, 7); c.fill();
+      if (!handNear(W)) { c.fillStyle = 'rgba(230,120,100,.8)'; c.beginPath(); c.arc(W.x, W.y, S * .06, 0, 7); c.fill(); }
     }
   }
   // legs
   for (const side of [1, -1]) {
     const [hp, kn, an] = side > 0 ? [23, 25, 27] : [24, 26, 28];
-    const A = Pa(hp), K = P(kn), N = P(an);
-    if (!A || !K) continue;
-    const o = outSign(A, K, F.hm);
+    const A = P(hp), K = P(kn), N = P(an);
+    const lref = F.hmP || F.hm || F.center;
+    if (A && K) {
+    const o = outSign(A, K, lref);
     spindle(c, S, A, K, o * .1, .1, .1, .96, 5);      // vastus lateralis
     spindle(c, S, A, K, -o * .07, .085, .45, .98, 4);  // vastus medialis
     spindle(c, S, A, K, -o * .1, .07, .02, .6, 3);     // adductors
@@ -606,7 +648,9 @@ function drawMuscles(c, F) {
     for (let i = 10; i >= 0; i--) sp.push(f(o * .16 - o * .28 * i / 10 + .03, i / 10));
     musclePaint(c, sp, S, null);
     tendon(c, S, f(0, .9), f(0, 1.04), .05);
-    if (N) {
+    }
+    if (K && N) {
+      const o = outSign(K, N, lref);
       spindle(c, S, K, N, o * .065, .085, .04, .62, 4);  // gastrocnemius lateral
       spindle(c, S, K, N, -o * .06, .09, .05, .66, 4);   // gastrocnemius medial
       spindle(c, S, K, N, o * .01, .05, .06, .82, 3);    // tibialis anterior
@@ -628,16 +672,19 @@ function organ(c, pts, S, c1, c2, stroke = 'rgba(40,0,10,.55)') {
   c.strokeStyle = stroke; c.lineWidth = Math.max(1, S * .008); c.stroke();
 }
 function drawOrgans(c, F, time) {
-  const {S, H, neckTop} = F; const T = (u, v) => F.T(u * 1.2, v);
+  const {S} = F;
   const breath = 1 + .025 * Math.sin(time * 1.6);
   const beat = Math.pow(Math.max(0, Math.sin(time * 7.5)), 6);
-  // brain
+  if (F.head) { const {H} = F;
   const bp = ellipsePts(H, 0, .3, .54, .5, 24);
   organ(c, bp, S, '#ffd0dc', '#d9728f');
   c.save(); smoothPath(c, bp); c.clip(); c.strokeStyle = 'rgba(120,30,60,.45)'; c.lineWidth = Math.max(.8, S * .006);
   for (let k = 0; k < 9; k++) { const pts = []; for (let i = 0; i <= 20; i++) { const x = -.6 + 1.2 * i / 20; pts.push(H(x, -.1 + k * .11 + .035 * Math.sin(i * 1.7 + k * 2.1))); } strokeLine(c, pts); }
   c.strokeStyle = 'rgba(100,20,50,.7)'; c.lineWidth = Math.max(1, S * .01); strokeLine(c, [H(0, .82), H(0, .5), H(.02, .1)]);
   c.restore();
+  }
+  if (!F.torso) return;
+  const T = (u, v) => F.T(u * 1.2, v), neckTop = F.head ? F.neckTop : F.T(0, -.3);
   // trachea + bronchi
   c.strokeStyle = 'rgba(245,225,230,.9)'; c.lineCap = 'round';
   c.lineWidth = S * .05; strokeLine(c, [neckTop, T(0, .04), T(0, .14)]);
@@ -706,41 +753,44 @@ function drawOrgans(c, F, time) {
 /* =====================================================================
    VESSELS
    ===================================================================== */
+function longestRun(arr) {
+  let best = [], cur = [];
+  for (const p of arr) { if (p) { cur.push(p); if (cur.length > best.length) best = cur.slice(); } else cur = []; }
+  return best;
+}
+function offsetPath(path, d) {
+  return path.map((p, i) => { const a = path[Math.max(0, i - 1)], b = path[Math.min(path.length - 1, i + 1)]; return add(p, mul(perp(nrm(sub(b, a))), d)); });
+}
 function vesselPaths(F) {
-  const {T, S, H, neckTop} = F;
-  const art = [], vein = [];
-  const heart = T(.14, .31), arch = [heart, T(.06, .16), T(-.02, .13), T(.05, .2)];
-  const aorta = [...arch, T(.05, .5), T(.03, .8), T(0, .93)];
-  art.push({p: aorta, w: .06});
-  vein.push({p: [T(-.08, .1), T(-.07, .3), T(-.06, .6), T(-.05, .93)], w: .065}); // vena cava
+  const {S} = F, art = [], vein = [];
+  const T = F.torso ? F.T : null, H = F.head ? F.H : null;
+  if (T) {
+    const heart = T(.14, .31);
+    art.push({p: [heart, T(.06, .16), T(-.02, .13), T(.05, .2), T(.05, .5), T(.03, .8), T(0, .93)], w: .06});
+    vein.push({p: [T(-.08, .1), T(-.07, .3), T(-.06, .6), T(-.05, .93)], w: .065});
+    for (const s of [-1, 1]) art.push({p: [T(.04, .66), T(s * .38, .67)], w: .022});
+  }
   for (const s of [-1, 1]) {
-    // carotid / jugular + head branches
-    const ear = Pa(s > 0 ? 7 : 8) || H(s * .45, -.1);
-    art.push({p: [T(s * .04, .14), T(s * .06, .03), lerp(neckTop, ear, .45), H(s * .38, -.2), H(s * .42, .25), H(s * .25, .6)], w: .03});
-    art.push({p: [H(s * .4, -.1), H(s * .2, -.45), H(s * .05, -.55)], w: .015});
-    vein.push({p: [T(s * .1, .16), T(s * .12, .03), add(lerp(neckTop, ear, .45), mul(F.down, S * .02)), H(s * .5, -.1), H(s * .5, .35)], w: .032});
-    // arms
-    const [sh, el, wr] = s > 0 ? [11, 13, 15] : [12, 14, 16];
-    const A = Pa(sh), B = P(el), W = P(wr);
-    if (A) {
-      const ap = [T(s * .05, .15), T(s * .45, .08), A]; if (B) ap.push(B); if (W) ap.push(W);
-      art.push({p: ap, w: .032, branch: true});
-      const vp = ap.map((p, i) => i === 0 ? T(s * .12, .17) : add(p, mul(perp(nrm(sub(ap[Math.min(i, ap.length - 1)], ap[i - 1]))), S * .035)));
-      vein.push({p: vp, w: .03, branch: true});
+    if (H) {
+      art.push({p: [H(s * .4, -.1), H(s * .2, -.45), H(s * .05, -.55)], w: .015});
+      art.push({p: [H(s * .38, -.2), H(s * .42, .25), H(s * .25, .6)], w: .02});
     }
-    // renal
-    art.push({p: [T(.04, .66), T(s * .38, .67)], w: .022});
-    // legs
-    const [hp, kn, an, ft] = s > 0 ? [23, 25, 27, 31] : [24, 26, 28, 32];
-    const Hh = Pa(hp), K = P(kn), N = P(an), Ft = P(ft);
-    if (Hh) {
-      const lp = [T(0, .93), lerp(T(0, .93), Hh, .6), add(Hh, mul(F.hxu, -s * S * .04))]; if (K) lp.push(K); if (N) lp.push(N); if (N && Ft) lp.push(lerp(N, Ft, .8));
-      art.push({p: lp, w: .045, branch: true});
-      vein.push({p: lp.map((p, i) => add(p, mul(F.hxu, s * S * (i ? .05 : .02)))), w: .042, branch: true});
+    if (T && H) {
+      const ear = P(s > 0 ? 7 : 8) || H(s * .45, -.1);
+      art.push({p: [T(s * .04, .14), T(s * .06, .03), lerp(F.neckTop, ear, .45), H(s * .38, -.2)], w: .03});
+      vein.push({p: [T(s * .1, .16), T(s * .12, .03), add(lerp(F.neckTop, ear, .45), mul(F.down, S * .02)), H(s * .5, -.1), H(s * .5, .35)], w: .032});
     }
+    const [sh, el, wr, hp, kn, an, ft] = s > 0 ? [11, 13, 15, 23, 25, 27, 31] : [12, 14, 16, 24, 26, 28, 32];
+    const W = P(wr);
+    const armRun = longestRun([T ? T(s * .05, .15) : null, T ? T(s * .45, .08) : null, P(sh), P(el), W && !handNear(W) ? W : (W ? lerp(P(el) || W, W, .97) : null)]);
+    if (armRun.length >= 2) { art.push({p: armRun, w: .032, branch: true}); vein.push({p: offsetPath(armRun, S * .035), w: .03, branch: true}); }
+    const N = P(an), Ft = P(ft);
+    const legRun = longestRun([T ? T(0, .93) : null, P(hp), P(kn), N, N && Ft ? lerp(N, Ft, .8) : null]);
+    if (legRun.length >= 2) { art.push({p: legRun, w: .045, branch: true}); vein.push({p: offsetPath(legRun, s * S * .045), w: .042, branch: true}); }
   }
   return {art, vein};
 }
+
 function drawVesselSet(c, S, list, col, dark, time, pulse) {
   c.lineCap = 'round'; c.lineJoin = 'round';
   for (const v of list) {
@@ -769,10 +819,121 @@ function drawVessels(c, F, time) {
   const {art, vein} = vesselPaths(F);
   drawVesselSet(c, F.S, vein, '#4b78ff', 'rgba(10,20,80,.85)', time, false);
   drawVesselSet(c, F.S, art, '#ff3845', 'rgba(90,0,10,.85)', time, true);
+  if (!F.torso) return;
   // heart
   const beat = Math.pow(Math.max(0, Math.sin(time * 7.5)), 6), hc = F.T(.12, .31), hs = 1 + beat * .08;
   const HT = (u, v) => add(hc, mul(sub(F.T(.12 + u * 1.75, .31 + v * .62), hc), hs));
   organ(c, [HT(-.12, -.08), HT(.02, -.12), HT(.14, -.08), HT(.24, .02), HT(.18, .12), HT(.02, .18), HT(-.1, .08)], F.S, '#ff6470', '#8a0f1c');
+}
+
+/* =====================================================================
+   HAND (dedicated Hand Landmarker: 21 points per hand)
+   0 wrist · 1-4 thumb (CMC,MCP,IP,TIP) · 5-8 index · 9-12 middle · 13-16 ring · 17-20 pinky
+   ===================================================================== */
+function handGeo(hd) {
+  const h = hd.pts, W0 = h[0], Sh = Math.max(len(sub(h[9], W0)), 6);
+  const dir = nrm(sub(h[9], W0)), acr = sub(h[5], h[17]);          // across palm, toward index/thumb side
+  const Q = (a, b) => add(add(W0, mul(sub(h[9], W0), b)), mul(acr, a)); // palm coords
+  return {h, W0, Sh, dir, acr, Q, side: nrm(acr)};
+}
+const FINGERS = [[5, 6, 7, 8, 1], [9, 10, 11, 12, 1.05], [13, 14, 15, 16, .97], [17, 18, 19, 20, .8]];
+
+function drawHandBones(c, hd) {
+  const {h, W0, Sh, dir, Q, side} = handGeo(hd);
+  boneStyle(c, Sh * 1.3);
+  const gap = (A, B, o) => longBone(c, lerp(A, B, .07), lerp(B, A, .07), Sh, o);
+  // distal radius (thumb side) + ulna — continue down the forearm
+  const back = mul(dir, -1);
+  c.save(); c.globalAlpha *= .85;
+  const rA = add(add(W0, mul(back, Sh * 1.6)), mul(side, Sh * .13)), rB = add(add(W0, mul(back, Sh * .05)), mul(side, Sh * .17));
+  longBone(c, rA, rB, Sh, {w: .07, p0: .07, p1: .16, e0: 0, e1: .02});
+  const uA = add(add(W0, mul(back, Sh * 1.6)), mul(side, -Sh * .16)), uB = add(add(W0, mul(back, Sh * .1)), mul(side, -Sh * .19));
+  longBone(c, uA, uB, Sh, {w: .055, p0: .055, p1: .085, e0: 0, e1: .02});
+  c.restore();
+  // carpal bones (two rows)
+  const rot = Math.atan2(side.y, side.x);
+  const carp = (p, rx, ry) => fillBone(c, ellipsePts((x, y) => V(x, y), p.x, p.y, rx * Sh, ry * Sh, 12, rot));
+  carp(Q(.3, .08), .085, .065); carp(Q(.05, .085), .075, .07); carp(Q(-.2, .09), .065, .065); carp(Q(-.33, .15), .035, .035);
+  carp(lerp(h[1], Q(.3, .2), .35), .07, .065); carp(Q(.17, .22), .055, .065); carp(Q(-.02, .23), .07, .085); carp(Q(-.22, .22), .07, .075);
+  // metacarpals
+  const mb = Q(0, .3);
+  for (const [m, , , , k] of FINGERS) {
+    const base = add(mb, mul(sub(h[m], h[9]), .58));
+    gap(base, h[m], {w: .04 * k, p0: .058 * k, p1: .066 * k});
+  }
+  // phalanges (with joint gaps like a real X-ray)
+  for (const [m, p, d, t, k] of FINGERS) {
+    gap(h[m], h[p], {w: .038 * k, p0: .058 * k, p1: .048 * k});
+    gap(h[p], h[d], {w: .032 * k, p0: .046 * k, p1: .04 * k, noCore: true});
+    gap(h[d], lerp(h[d], h[t], .84), {w: .027 * k, p0: .038 * k, p1: .042 * k, noCore: true});
+  }
+  // thumb
+  gap(h[1], h[2], {w: .048, p0: .068, p1: .066});
+  gap(h[2], h[3], {w: .043, p0: .062, p1: .052});
+  gap(h[3], lerp(h[3], h[4], .84), {w: .036, p0: .05, p1: .05, noCore: true});
+  for (const o of [-1, 1]) { const p = add(h[2], mul(perp(nrm(sub(h[3], h[2]))), o * Sh * .05)); circleBone(c, p, Sh * .022); } // sesamoids
+}
+
+function drawHandMuscles(c, hd) {
+  const {h, W0, Sh, dir, Q, side} = handGeo(hd), S = Sh * 1.3;
+  const back = mul(dir, -1);
+  // forearm muscle bellies (flexors) leading into the wrist
+  for (const o of [-.17, .17]) {
+    const A = add(add(W0, mul(back, Sh * 1.8)), mul(side, o * Sh)), B = add(add(W0, mul(back, Sh * .15)), mul(side, o * Sh * .7));
+    spindle(c, Sh, A, B, 0, .14, -.2, .75, 4);
+  }
+  // thenar (thumb pad) & hypothenar (pinky pad)
+  musclePaint(c, [Q(.36, .06), lerp(h[1], h[2], .55), lerp(h[2], h[5], .45), Q(.22, .68), Q(.02, .45), Q(.1, .16)], S, null);
+  musclePaint(c, [Q(-.2, .1), Q(-.52, .28), lerp(h[17], Q(-.56, .65), .5), Q(-.44, .92), Q(-.22, .62), Q(-.14, .3)], S, null);
+  // interossei between metacarpals
+  for (let i = 0; i < 3; i++) {
+    const a = FINGERS[i][0], b = FINGERS[i + 1][0];
+    const top = lerp(h[a], h[b], .5), bot = lerp(Q(0, .32), top, .12);
+    spindle(c, Sh, bot, top, 0, .05, .05, .95, 2);
+  }
+  // flexor tendons through the fingers
+  c.lineCap = 'round';
+  const tend = pts => { c.strokeStyle = 'rgba(120,70,55,.6)'; c.lineWidth = Sh * .042; strokeLine(c, pts); c.strokeStyle = 'rgba(240,222,200,.75)'; c.lineWidth = Sh * .026; strokeLine(c, pts); };
+  for (const [m, p, d, t] of FINGERS) tend([add(Q(0, .12), mul(sub(h[m], h[9]), .3)), h[m], h[p], h[d], lerp(h[d], h[t], .7)]);
+  tend([Q(.2, .12), h[2], h[3], lerp(h[3], h[4], .7)]);
+  // lumbricals (small muscles along the tendons in the palm)
+  for (const [m] of FINGERS) { const a = lerp(Q(0, .35), h[m], .25), b = lerp(Q(0, .35), h[m], .92); spindle(c, Sh, a, b, .045, .035, 0, 1, 1); }
+}
+
+function drawHandVessels(c, hd, time) {
+  const {h, W0, Sh, dir, Q, side} = handGeo(hd);
+  const back = mul(dir, -1), art = [], vein = [];
+  const radialIn = add(add(W0, mul(back, Sh * 1.6)), mul(side, Sh * .2)), ulnarIn = add(add(W0, mul(back, Sh * 1.6)), mul(side, -Sh * .2));
+  // radial artery → thumb & deep arch; ulnar artery → superficial palmar arch
+  art.push({p: [radialIn, Q(.36, .02), lerp(h[1], h[2], .3), h[2], h[3], lerp(h[3], h[4], .85)], w: .05});
+  const arch = [ulnarIn, Q(-.36, .05), Q(-.32, .42), Q(-.05, .56), Q(.2, .52), lerp(h[2], h[5], .45)];
+  art.push({p: arch, w: .045});
+  art.push({p: [Q(.3, .2), Q(0, .3), Q(-.25, .3)], w: .028}); // deep arch
+  // digital arteries: both sides of every finger
+  for (const [m, p, d, t] of FINGERS) {
+    const fd = nrm(sub(h[d], h[m])), pe = perp(fd), from = lerp(Q(0, .55), h[m], .3);
+    for (const o of [-1, 1]) art.push({p: [from, ...[h[m], h[p], h[d], lerp(h[d], h[t], .85)].map(q => add(q, mul(pe, o * Sh * .055)))], w: .022});
+  }
+  // dorsal veins (network on the back of the hand)
+  for (const o of [-.22, .22]) {
+    const v0 = add(add(W0, mul(back, Sh * 1.6)), mul(side, o * Sh));
+    vein.push({p: [v0, add(W0, mul(side, o * Sh * 1.1)), Q(o * .9, .45), Q(o * .5, .8)], w: .045});
+  }
+  for (const [m, p] of FINGERS) vein.push({p: [Q(0, .55), lerp(Q(0, .55), h[m], .5), h[m], lerp(h[m], h[p], .6)], w: .025});
+  drawVesselSet(c, Sh, vein, '#4b78ff', 'rgba(10,20,80,.85)', time, false);
+  drawVesselSet(c, Sh, art, '#ff3845', 'rgba(90,0,10,.85)', time, true);
+}
+
+function paintHandMask(c, hd, col) {
+  const {h, W0, Sh, dir} = handGeo(hd);
+  c.save(); c.fillStyle = col; c.strokeStyle = col; c.lineCap = 'round'; c.lineJoin = 'round';
+  c.lineWidth = Sh * .82; c.beginPath(); c.moveTo(W0.x, W0.y); const fb = add(W0, mul(dir, -Sh * 3)); c.lineTo(fb.x, fb.y); c.stroke();
+  const pc = lerp(W0, h[9], .5);
+  smoothPath(c, [0, 1, 2, 5, 9, 13, 17].map(i => add(h[i], mul(nrm(sub(h[i], pc)), Sh * .12)))); c.fill();
+  for (const [a, b, d, t, w] of [[1, 2, 3, 4, .27], [5, 6, 7, 8, .23], [9, 10, 11, 12, .24], [13, 14, 15, 16, .22], [17, 18, 19, 20, .19]]) {
+    c.lineWidth = Sh * w; c.beginPath(); c.moveTo(h[a].x, h[a].y); for (const k of [b, d, t]) c.lineTo(h[k].x, h[k].y); c.stroke();
+  }
+  c.restore();
 }
 
 /* =====================================================================
@@ -803,12 +964,14 @@ function composeXray(src, W, Hh, F, time) {
     if (!lowFx) { xctx.filter = `blur(${Math.max(3, W * .012)}px)`; xctx.globalAlpha = .22; xctx.drawImage(mask, 0, 0, W, Hh); xctx.filter = 'none'; }
     xctx.globalCompositeOperation = 'source-over'; xctx.globalAlpha = 1;
   }
-  if (!F) return;
+  if (!F && !hands.length) return;
 
   lctx.clearRect(0, 0, W, Hh);
-  const blurPx = Math.max(2, F.S * .035);
+  const refS = F ? F.S : Math.max(...hands.map(h => len(sub(h.pts[9], h.pts[0])))) * 3;
+  const blurPx = Math.max(2, refS * .035);
   if (level === 0) {
-    drawSkeleton(lctx, F);
+    if (F) drawSkeleton(lctx, F);
+    for (const h of hands) drawHandBones(lctx, h);
     xctx.globalCompositeOperation = 'lighter';
     if (!lowFx) { xctx.filter = `blur(${blurPx}px)`; xctx.globalAlpha = .38; xctx.drawImage(lay, 0, 0); xctx.filter = 'none'; }
     xctx.globalAlpha = .88; xctx.drawImage(lay, 0, 0);
@@ -816,12 +979,13 @@ function composeXray(src, W, Hh, F, time) {
   } else {
     // faint bone underlay
     boctx.clearRect(0, 0, W, Hh);
-    drawSkeleton(boctx, F, 1, level === 1 ? 'all' : 'trunk');
+    if (F) drawSkeleton(boctx, F);
+    for (const h of hands) drawHandBones(boctx, h);
     xctx.globalCompositeOperation = 'lighter'; xctx.globalAlpha = level === 1 ? .35 : .3; xctx.drawImage(bone, 0, 0);
     xctx.globalCompositeOperation = 'source-over'; xctx.globalAlpha = 1;
-    if (level === 1) drawMuscles(lctx, F);
-    if (level === 2) drawOrgans(lctx, F, time);
-    if (level === 3) drawVessels(lctx, F, time);
+    if (level === 1) { if (F) drawMuscles(lctx, F); for (const h of hands) drawHandMuscles(lctx, h); }
+    if (level === 2) { if (F) drawOrgans(lctx, F, time); }
+    if (level === 3) { if (F) drawVessels(lctx, F, time); for (const h of hands) drawHandVessels(lctx, h, time); }
     if (!lowFx) { xctx.globalCompositeOperation = 'lighter'; xctx.filter = `blur(${blurPx * 1.2}px)`; xctx.globalAlpha = .35; xctx.drawImage(lay, 0, 0); xctx.filter = 'none'; xctx.globalCompositeOperation = 'source-over'; }
     xctx.globalAlpha = level === 1 ? .9 : .92; xctx.drawImage(lay, 0, 0); xctx.globalAlpha = 1;
     if (level === 1) { // bones peeking at joints
@@ -833,7 +997,7 @@ function composeXray(src, W, Hh, F, time) {
 
 function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 
-function drawView(src, W, Hh, time) {
+function drawView(src, W, Hh, time, F) {
   const dpr = Math.min(2, devicePixelRatio || 1);
   const DW = Math.round(view.clientWidth * dpr), DH = Math.round(view.clientHeight * dpr);
   if (view.width !== DW || view.height !== DH) { view.width = DW; view.height = DH; }
@@ -866,8 +1030,15 @@ function drawView(src, W, Hh, time) {
   }
   vctx.shadowBlur = 0; vctx.font = `700 ${10 * dpr}px Orbitron, sans-serif`; vctx.fillStyle = LEVELS[level].color;
   vctx.textAlign = 'left'; vctx.fillText('X-RAY · ' + LEVELS[level].tag, mx + 12 * dpr, wy + 20 * dpr);
-  if (!lm) { vctx.textAlign = 'center'; vctx.font = `600 ${14 * dpr}px Heebo, sans-serif`; vctx.fillStyle = 'rgba(255,211,107,.95)';
-    vctx.fillText('מחפש גוף… כוונו אל בן אדם', DW / 2, wy + wh / 2); }
+  const msg = (l1, l2) => {
+    vctx.textAlign = 'center'; vctx.font = `700 ${14 * dpr}px Heebo, sans-serif`;
+    const w = Math.max(vctx.measureText(l1).width, l2 ? vctx.measureText(l2).width : 0) + 32 * dpr, cy = wy + wh / 2;
+    vctx.fillStyle = 'rgba(0,8,18,.72)'; roundRect(vctx, DW / 2 - w / 2, cy - 24 * dpr, w, (l2 ? 54 : 34) * dpr, 10 * dpr); vctx.fill();
+    vctx.fillStyle = 'rgba(255,211,107,.98)'; vctx.fillText(l1, DW / 2, cy - 2 * dpr);
+    if (l2) { vctx.font = `400 ${12 * dpr}px Heebo, sans-serif`; vctx.fillStyle = 'rgba(207,245,255,.8)'; vctx.fillText(l2, DW / 2, cy + 18 * dpr); }
+  };
+  if (!F && !hands.length) msg('מחפש… כוונו אל גוף או אל יד', 'רגל לבד? צריך שגם הגוף העליון ייכנס לפריים');
+  else if (level === 2 && !(F && (F.torso || F.head))) msg('האיברים נמצאים בחזה ובבטן', 'כוונו לשם, או בחרו שכבה אחרת');
   vctx.restore();
 }
 
@@ -884,31 +1055,33 @@ function maskFromFloat(arr, w, h) {
   mctx.putImageData(maskImg, 0, 0);
   maskReady = true;
 }
-// fallback silhouette from landmarks (used in demo, or if segmentation is unavailable)
-function maskFromPose(W, Hh, F) {
-  if (mask.width !== W || mask.height !== Hh) { mask.width = W; mask.height = Hh; maskImg = null; }
-  mctx.clearRect(0, 0, W, Hh);
-  if (!F) { maskReady = false; return; }
-  paintSilhouette(mctx, F, 'rgb(150,210,255)', 'rgb(150,210,255)', 'rgb(150,210,255)', 'rgb(150,210,255)');
-  maskReady = true;
+const MC = 'rgb(150,210,255)';
+function buildMask(W, Hh, F) {
+  if (demo || !maskFromSeg) {
+    if (mask.width !== W || mask.height !== Hh) { mask.width = W; mask.height = Hh; maskImg = null; }
+    mctx.clearRect(0, 0, W, Hh);
+    if (F) paintSilhouette(mctx, F, MC, MC, MC, MC);
+  }
+  if (hands.length) { mctx.save(); mctx.scale(mask.width / W, mask.height / Hh); for (const h of hands) paintHandMask(mctx, h, MC); mctx.restore(); }
+  maskReady = (!demo && maskFromSeg) || !!F || hands.length > 0;
 }
 function paintSilhouette(c, F, shirt, pants, skin, hair) {
-  const {S, T, H} = F;
+  const {S} = F;
   c.lineCap = 'round'; c.lineJoin = 'round';
-  const limb = (a, b, w, col) => { const A = Pa(a), B = Pa(b); if (!A || !B) return; c.strokeStyle = col; c.lineWidth = S * w; c.beginPath(); c.moveTo(A.x, A.y); c.lineTo(B.x, B.y); c.stroke(); };
-  // legs
+  const limb = (a, b, w, col) => { const A = P(a), B = P(b); if (!A || !B) return; c.strokeStyle = col; c.lineWidth = S * w; c.beginPath(); c.moveTo(A.x, A.y); c.lineTo(B.x, B.y); c.stroke(); };
   limb(23, 25, .36, pants); limb(24, 26, .36, pants); limb(25, 27, .26, pants); limb(26, 28, .26, pants);
   for (const [a, b] of [[29, 31], [30, 32]]) limb(a, b, .13, '#222');
-  // torso
-  c.fillStyle = shirt; smoothPath(c, [add(F.Rs, mul(F.down, -S * .05)), add(F.Ls, mul(F.down, -S * .05)), T(1.18, .25), T(1.0, .75), T(1.08, 1.02), T(-1.08, 1.02), T(-1.0, .75), T(-1.18, .25)]); c.fill();
-  c.fillStyle = pants; smoothPath(c, [T(-1.08, .9), T(1.08, .9), T(1.12, 1.18), T(-1.12, 1.18)]); c.fill();
-  // arms
+  if (F.torso) { const {T} = F;
+    c.fillStyle = shirt; smoothPath(c, [add(F.Rs, mul(F.down, -S * .05)), add(F.Ls, mul(F.down, -S * .05)), T(1.18, .25), T(1.0, .75), T(1.08, 1.02), T(-1.08, 1.02), T(-1.0, .75), T(-1.18, .25)]); c.fill();
+    c.fillStyle = pants; smoothPath(c, [T(-1.08, .9), T(1.08, .9), T(1.12, 1.18), T(-1.12, 1.18)]); c.fill();
+  }
   limb(11, 13, .24, shirt); limb(12, 14, .24, shirt); limb(13, 15, .19, skin); limb(14, 16, .19, skin);
-  for (const w of [15, 16]) { const p = Pa(w); if (p) { c.fillStyle = skin; c.beginPath(); c.arc(p.x, p.y, S * .1, 0, 7); c.fill(); } }
-  // neck + head
-  c.strokeStyle = skin; c.lineWidth = S * .2; c.beginPath(); const nt = F.neckTop, nb = T(0, .05); c.moveTo(nt.x, nt.y); c.lineTo(nb.x, nb.y); c.stroke();
-  c.fillStyle = skin; smoothPath(c, ellipsePts(H, 0, .05, .62, .92, 24)); c.fill();
-  c.fillStyle = hair; smoothPath(c, [H(-.64, .15), H(-.55, .75), H(0, 1.02), H(.55, .75), H(.64, .15), H(.5, .5), H(0, .62), H(-.5, .5)]); c.fill();
+  for (const w of [15, 16]) { const p = P(w); if (p && !handNear(p)) { c.fillStyle = skin; c.beginPath(); c.arc(p.x, p.y, S * .1, 0, 7); c.fill(); } }
+  if (F.head) { const {H} = F;
+    if (F.torso) { c.strokeStyle = skin; c.lineWidth = S * .2; c.beginPath(); const nt = F.neckTop, nb = F.T(0, .05); c.moveTo(nt.x, nt.y); c.lineTo(nb.x, nb.y); c.stroke(); }
+    c.fillStyle = skin; smoothPath(c, ellipsePts(H, 0, .05, .62, .92, 24)); c.fill();
+    c.fillStyle = hair; smoothPath(c, [H(-.64, .15), H(-.55, .75), H(0, 1.02), H(.55, .75), H(.64, .15), H(.5, .5), H(0, .62), H(-.5, .5)]); c.fill();
+  }
 }
 
 /* =====================================================================
@@ -945,9 +1118,11 @@ function demoPose(t) {
   const arr = []; for (let i = 0; i < 33; i++) arr.push(L[i]);
   return {W, H: Hh, lm: arr};
 }
-function demoFrame(t) {
+function demoFrame(t, zoom = 1) {
   const d = demoPose(t);
   if (dsrc.width !== d.W) { dsrc.width = d.W; dsrc.height = d.H; }
+  FW = d.W; FH = d.H; hands = [];
+  if (zoom !== 1) { const piv = lerp(d.lm[11], d.lm[13], .3); d.lm = d.lm.map(p => ({x: d.W * .45 + (p.x - piv.x) * zoom, y: d.H * .42 + (p.y - piv.y) * zoom, v: p.v})); }
   lm = d.lm; lmSeen = performance.now();
   const W = d.W, Hh = d.H;
   // room
@@ -962,43 +1137,103 @@ function demoFrame(t) {
   return dsrc;
 }
 
+function demoHandPts(t) {
+  const Sh = 290, W0 = V(330 + Math.sin(t * .5) * 25, 960), rot = Math.sin(t * .4) * .16;
+  const R = (x, y) => { const c = Math.cos(rot), s = Math.sin(rot); return add(W0, V((x * c - y * s) * Sh, (x * s + y * c) * Sh)); };
+  const L = []; L[0] = [0, 0];
+  const fingers = [[5, [-.36, -.95], -.13, [.46, .27, .2]], [9, [-.05, -1], -.02, [.5, .31, .22]], [13, [.24, -.94], .08, [.47, .29, .21]], [17, [.48, -.8], .2, [.36, .22, .18]]];
+  fingers.forEach(([m, mcp, a, lens], f) => {
+    const curl = Math.pow(Math.max(0, Math.sin(t * 1.3 - f * .55)), 1.3) * 1.35;
+    let p = mcp, acc = 0; L[m] = p;
+    [.55, .8, .6].forEach((w, j) => {
+      acc += curl * w;
+      const L0 = lens[j], dx = Math.sin(a) * L0 * Math.cos(acc), dy = -Math.cos(a) * L0 * Math.cos(acc) + L0 * Math.sin(acc) * .32;
+      p = [p[0] + dx, p[1] + dy]; L[m + j + 1] = p;
+    });
+  });
+  const ab = .55 + .35 * (.5 + .5 * Math.sin(t * .9)), tc = .5 + .5 * Math.sin(t * 1.3 + 1);
+  L[1] = [-.3, -.22]; let p = L[1], ang = -ab;
+  [.42, .32, .26].forEach((l, j) => { ang -= j ? tc * .35 : 0; p = [p[0] + Math.sin(ang) * l, p[1] - Math.cos(ang) * l]; L[2 + j] = p; });
+  return L.map(([x, y]) => R(x, y));
+}
+function demoHandFrame(t) {
+  const W = 620, Hh = 1040;
+  if (dsrc.width !== W) { dsrc.width = W; dsrc.height = Hh; }
+  FW = W; FH = Hh; lm = null;
+  const pts = demoHandPts(t);
+  hands = [{label: 'demo', pts, seen: performance.now()}];
+  const g = dctx.createLinearGradient(0, 0, 0, Hh); g.addColorStop(0, '#d8d2c6'); g.addColorStop(.6, '#c2b9a9'); g.addColorStop(.6, '#8b6a4c'); g.addColorStop(1, '#6e5038');
+  dctx.fillStyle = g; dctx.fillRect(0, 0, W, Hh);
+  dctx.fillStyle = '#2b4e72'; dctx.fillRect(W * .62, Hh * .1, W * .28, Hh * .34);
+  dctx.fillStyle = '#e9e4da'; dctx.fillRect(W * .65, Hh * .13, W * .22, Hh * .28);
+  paintHandMask(dctx, hands[0], '#d9a47f');
+  const {W0, Sh, dir} = handGeo(hands[0]);
+  dctx.strokeStyle = '#2f5d8a'; dctx.lineWidth = Sh * .98; dctx.lineCap = 'butt';
+  dctx.beginPath(); const a = add(W0, mul(dir, -Sh * 1.2)), b = add(W0, mul(dir, -Sh * 3.2)); dctx.moveTo(a.x, a.y); dctx.lineTo(b.x, b.y); dctx.stroke();
+  dctx.fillStyle = 'rgba(255,220,210,.8)';
+  for (const t of [4, 8, 12, 16, 20]) { const q = lerp(pts[t - 1], pts[t], .78); dctx.beginPath(); dctx.arc(q.x, q.y, Sh * .055, 0, 7); dctx.fill(); }
+  return dsrc;
+}
+
 /* =====================================================================
    DETECTION
    ===================================================================== */
 async function loadModel() {
-  if (landmarker) return landmarker;
-  const {FilesetResolver, PoseLandmarker} = await import(`${MP_URL}/vision_bundle.mjs`);
+  if (landmarker || handLandmarker) return;
+  const {FilesetResolver, PoseLandmarker, HandLandmarker} = await import(`${MP_URL}/vision_bundle.mjs`);
   const fileset = await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
-  const opts = d => ({baseOptions: {modelAssetPath: MODEL_URL, delegate: d}, runningMode: 'VIDEO', numPoses: 1,
-    outputSegmentationMasks: true, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .5, minTrackingConfidence: .5});
-  try { landmarker = await PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
-  catch (e) { console.warn('GPU delegate failed, using CPU', e); landmarker = await PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
-  return landmarker;
+  const make = async (Cls, opts) => {
+    try { return await Cls.createFromOptions(fileset, {...opts, baseOptions: {...opts.baseOptions, delegate: 'GPU'}}); }
+    catch (e) { console.warn('GPU failed, CPU fallback', e); return await Cls.createFromOptions(fileset, {...opts, baseOptions: {...opts.baseOptions, delegate: 'CPU'}}); }
+  };
+  try { landmarker = await make(PoseLandmarker, {baseOptions: {modelAssetPath: MODEL_URL}, runningMode: 'VIDEO', numPoses: 1,
+    outputSegmentationMasks: true, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .5, minTrackingConfidence: .5}); }
+  catch (e) { console.warn('pose model failed', e); }
+  try { handLandmarker = await make(HandLandmarker, {baseOptions: {modelAssetPath: HAND_URL}, runningMode: 'VIDEO', numHands: 2,
+    minHandDetectionConfidence: .5, minHandPresenceConfidence: .5, minTrackingConfidence: .5}); }
+  catch (e) { console.warn('hand model failed', e); }
+  if (!landmarker && !handLandmarker) throw new Error('no models');
+}
+
+function updateHands(r, W, Hh) {
+  const now = performance.now(), out = [];
+  (r.landmarks || []).forEach((pts, i) => {
+    const label = r.handedness?.[i]?.[0]?.categoryName || 'h' + i;
+    const np = pts.map(p => V(p.x * W, p.y * Hh));
+    const prev = hands.find(h => h.label === label);
+    const sm = prev ? np.map((p, j) => { const o = prev.pts[j], d = len(sub(p, o)), k = clamp(.4 + d / (W * .04), .4, .92); return lerp(o, p, k); }) : np;
+    out.push({label, pts: sm, seen: now});
+  });
+  for (const h of hands) if (!out.find(o => o.label === h.label) && now - h.seen < 200) out.push(h);
+  hands = out;
 }
 
 function detect(W, Hh) {
   if (video.currentTime === lastVT) return;
   lastVT = video.currentTime;
   let ts = performance.now(); if (ts <= lastTs) ts = lastTs + 1; lastTs = ts;
-  try {
-    landmarker.detectForVideo(video, ts, res => {
-      const raw = res.landmarks && res.landmarks[0];
-      if (raw) {
-        const next = raw.map(p => ({x: p.x * W, y: p.y * Hh, v: p.visibility ?? 1}));
-        if (lm && lm.length === next.length) {
-          // adaptive smoothing: follow fast moves, damp jitter
-          lm = next.map((p, i) => { const o = lm[i], d = Math.hypot(p.x - o.x, p.y - o.y), k = clamp(.35 + d / (W * .05), .35, .9);
-            return {x: o.x + (p.x - o.x) * k, y: o.y + (p.y - o.y) * k, v: o.v + (p.v - o.v) * .5}; });
-        } else lm = next;
-        lmSeen = performance.now();
-      }
-      const m = res.segmentationMasks && res.segmentationMasks[0];
-      if (m) {
-        try { maskFromFloat(m.getAsFloat32Array(), m.width, m.height); maskFromSeg = true; }
-        catch (e) { maskFromSeg = false; }
-      } else maskFromSeg = false;
-    });
-  } catch (e) { console.warn('detect error', e); }
+  const both = landmarker && handLandmarker, odd = frameIdx % 2 === 1;
+  if (handLandmarker && (!lowFx || !both || odd)) {
+    try { updateHands(handLandmarker.detectForVideo(video, ts), W, Hh); } catch (e) { console.warn('hand detect', e); }
+  }
+  if (landmarker && (!lowFx || !both || !odd)) {
+    try {
+      landmarker.detectForVideo(video, ts, res => {
+        const raw = res.landmarks && res.landmarks[0];
+        if (raw) {
+          const next = raw.map(p => ({x: p.x * W, y: p.y * Hh, v: p.visibility ?? 1}));
+          if (lm && lm.length === next.length) {
+            lm = next.map((p, i) => { const o = lm[i], d = Math.hypot(p.x - o.x, p.y - o.y), k = clamp(.35 + d / (W * .05), .35, .9);
+              return {x: o.x + (p.x - o.x) * k, y: o.y + (p.y - o.y) * k, v: o.v + (p.v - o.v) * .5}; });
+          } else lm = next;
+          lmSeen = performance.now();
+        }
+        const m = res.segmentationMasks && res.segmentationMasks[0];
+        if (m) { try { maskFromFloat(m.getAsFloat32Array(), m.width, m.height); maskFromSeg = true; } catch (e) { maskFromSeg = false; } }
+        else maskFromSeg = false;
+      });
+    } catch (e) { console.warn('pose detect', e); }
+  }
 }
 
 /* =====================================================================
@@ -1006,21 +1241,27 @@ function detect(W, Hh) {
    ===================================================================== */
 function loop() {
   if (!running) return;
+  frameIdx++;
   const t0 = performance.now(), time = t0 / 1000;
   let src, W, Hh;
-  if (demo) { src = demoFrame(time); W = dsrc.width; Hh = dsrc.height; }
-  else {
+  if (demo) {
+    src = demoScene === 'hand' ? demoHandFrame(time) : demoFrame(time, demoScene === 'close' ? 2.3 : 1);
+    W = dsrc.width; Hh = dsrc.height;
+  } else {
     if (video.readyState < 2 || !video.videoWidth) { raf = requestAnimationFrame(loop); return; }
-    src = video; W = video.videoWidth; Hh = video.videoHeight;
-    if (landmarker) detect(W, Hh);
-    if (lm && performance.now() - lmSeen > 450) { lm = null; }
+    src = video; W = video.videoWidth; Hh = video.videoHeight; FW = W; FH = Hh;
+    if (landmarker || handLandmarker) detect(W, Hh);
+    const now = performance.now();
+    if (lm && now - lmSeen > 450) lm = null;
+    hands = hands.filter(h => now - h.seen < 300);
   }
+  FW = W; FH = Hh;
   sizeAll(W, Hh);
   const F = lm ? frames() : null;
-  if (demo || !maskFromSeg) maskFromPose(W, Hh, F);
-  if (!lm) maskReady = demo ? maskReady : maskFromSeg && maskReady;
+  buildMask(W, Hh, F);
   composeXray(src, W, Hh, F, time);
-  drawView(src, W, Hh, time);
+  drawView(src, W, Hh, time, F);
+  window.__last = {F: !!F, torso: !!(F && F.torso), head: !!(F && F.head), hands: hands.length};
 
   // HUD / perf
   const dt = performance.now() - t0; fpsN++;
@@ -1028,7 +1269,7 @@ function loop() {
   if (slowFrames > 40 && !lowFx) { lowFx = true; console.info('low-fx mode on'); }
   if (t0 - fpsT > 1000) {
     $('hFps').textContent = fpsN + (lowFx ? ' ·LITE' : ''); fpsN = 0; fpsT = t0;
-    const hb = $('hBody'); hb.textContent = lm ? 'LOCKED' : 'SEARCHING'; hb.className = lm ? 'ok' : 'no';
+    const hb = $('hBody'), on = !!(lm || hands.length); hb.textContent = lm && hands.length ? 'BODY+HAND' : lm ? 'BODY' : hands.length ? 'HAND×' + hands.length : 'SEARCHING'; hb.className = on ? 'ok' : 'no';
   }
   raf = requestAnimationFrame(loop);
 }
@@ -1054,7 +1295,7 @@ async function openCamera() {
 }
 
 async function startCam(l) {
-  demo = false; lm = null; maskReady = false; maskFromSeg = false; lowFx = false; slowFrames = 0;
+  demo = false; lm = null; hands = []; maskReady = false; maskFromSeg = false; lowFx = false; slowFrames = 0;
   setLevel(l, false);
   $('start').style.display = 'none'; $('cam').classList.add('on'); $('demoTag').classList.remove('on');
   showOv('errOv', false);
@@ -1064,7 +1305,7 @@ async function startCam(l) {
     await openCamera();
   } catch (e) { return camError(e); }
   running = true; cancelAnimationFrame(raf); loop();
-  $('loadTitle').textContent = 'טוען מנוע זיהוי גוף…'; $('loadText').textContent = 'בפעם הראשונה זה לוקח כמה שניות (≈15MB). אחר כך זה נשמר בדפדפן.';
+  $('loadTitle').textContent = 'טוען מנוע זיהוי גוף…'; $('loadText').textContent = 'בפעם הראשונה זה לוקח כמה שניות (≈25MB). אחר כך זה נשמר בדפדפן.';
   try { await loadModel(); showOv('loadOv', false); }
   catch (e) {
     console.error(e); showOv('loadOv', false);
@@ -1087,9 +1328,11 @@ function camError(e) {
     : 'הדפדפן לא מאפשר מצלמה כאן. נסו לפתוח בכרום, מהכתובת של האפליקציה.';
   showOv('errOv', true);
 }
-function startDemo(l = level) {
+const SCENES = {body: '🎭 דמו: גוף מלא', close: '🎭 דמו: קרוב (פלג עליון)', hand: '🎭 דמו: יד'};
+function setScene(sc) { demoScene = sc; lm = null; hands = []; $('demoTag').textContent = SCENES[sc] + '  ⇄'; }
+function startDemo(l = level, sc = demoScene) {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  demo = true; lm = null; lowFx = false; slowFrames = 0;
+  demo = true; lm = null; hands = []; lowFx = false; slowFrames = 0; setScene(sc);
   setLevel(l, false);
   $('start').style.display = 'none'; $('cam').classList.add('on'); $('demoTag').classList.add('on');
   showOv('errOv', false); showOv('loadOv', false);
@@ -1098,7 +1341,7 @@ function startDemo(l = level) {
 function goBack() {
   running = false; cancelAnimationFrame(raf);
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  video.srcObject = null; lm = null; demo = false;
+  video.srcObject = null; lm = null; hands = []; demo = false;
   showOv('loadOv', false); showOv('errOv', false);
   $('cam').classList.remove('on'); $('start').style.display = 'flex';
 }
@@ -1119,7 +1362,9 @@ function snapshot() {
 }
 
 document.querySelectorAll('.tile').forEach(b => b.addEventListener('click', () => startCam(+b.dataset.l)));
-$('demoBtn').addEventListener('click', () => startDemo(0));
+$('demoBtn').addEventListener('click', () => startDemo(0, 'body'));
+$('demoHandBtn').addEventListener('click', () => startDemo(0, 'hand'));
+$('demoTag').addEventListener('click', () => { const k = Object.keys(SCENES); setScene(k[(k.indexOf(demoScene) + 1) % k.length]); });
 $('errDemo').addEventListener('click', () => startDemo(level));
 $('errBack').addEventListener('click', goBack);
 $('backBtn').addEventListener('click', goBack);
@@ -1135,8 +1380,8 @@ view.addEventListener('pointermove', e => { if (dragY === null) return; winCY = 
 view.addEventListener('pointerup', () => dragY = null);
 view.addEventListener('pointercancel', () => dragY = null);
 document.addEventListener('visibilitychange', () => { if (document.hidden && running && !demo) { /* keep stream; browser pauses rAF */ } });
-if (new URLSearchParams(location.search).has('demo')) startDemo(+(new URLSearchParams(location.search).get('l') || 0));
-window.__xray = {setLevel, startDemo};
+{ const q = new URLSearchParams(location.search); if (q.has('demo')) startDemo(+(q.get('l') || 0), q.get('demo') || 'body'); }
+window.__xray = {setLevel, startDemo, setScene};
 </script>
 </body>
 </html>
