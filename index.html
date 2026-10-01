@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#01060d">
+<title>X·RAY CAM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Heebo:wght@300;400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --c:#7fe7ff; --c2:#27c4ff; --bg:#01060d; --panel:rgba(3,16,30,.86);
+  --line:rgba(127,231,255,.28); --warn:#ffd36b; --err:#ff5d7a;
+  --lvl:#7fe7ff;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--c);font-family:'Heebo',system-ui,sans-serif;overflow:hidden;user-select:none}
+.mono{font-family:'Orbitron','Heebo',sans-serif;letter-spacing:.12em}
+button{font-family:inherit;cursor:pointer}
+
+/* ---------- START ---------- */
+#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom));
+  background:radial-gradient(ellipse at 50% 30%,rgba(39,196,255,.14),transparent 60%),var(--bg);overflow-y:auto}
+#start::before{content:'';position:fixed;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(127,231,255,.035) 3px 4px)}
+.hero{position:relative;width:132px;height:132px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;
+  box-shadow:0 0 60px rgba(39,196,255,.25),inset 0 0 40px rgba(39,196,255,.15)}
+.hero svg{width:78px;filter:drop-shadow(0 0 10px var(--c))}
+.hero::after{content:'';position:absolute;left:8%;right:8%;height:2px;background:linear-gradient(90deg,transparent,var(--c),transparent);animation:heroScan 2.6s ease-in-out infinite}
+@keyframes heroScan{0%,100%{top:18%}50%{top:82%}}
+h1{font-family:'Orbitron';font-weight:900;font-size:30px;letter-spacing:.22em;color:#dff9ff;text-shadow:0 0 18px var(--c2),0 0 42px var(--c2)}
+.sub{font-size:14px;color:rgba(191,240,255,.7);text-align:center;max-width:330px;line-height:1.7}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:360px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 10px;color:#cff5ff;display:flex;flex-direction:column;align-items:center;gap:6px;transition:.2s}
+.tile:active{transform:scale(.97)}
+.tile .ic{font-size:30px}
+.tile b{font-size:15px;font-weight:800}
+.tile small{font-size:11px;opacity:.6}
+.tile[data-l="0"]{--tc:#bfefff}.tile[data-l="1"]{--tc:#ff7a66}.tile[data-l="2"]{--tc:#ff9ec0}.tile[data-l="3"]{--tc:#ff4d5e}
+.tile:hover{border-color:var(--tc);box-shadow:0 0 22px color-mix(in srgb,var(--tc) 35%,transparent)}
+.demoBtn{background:none;border:1px dashed rgba(255,211,107,.5);color:var(--warn);border-radius:12px;padding:10px 18px;font-size:13px}
+.note{font-size:11.5px;color:rgba(191,240,255,.5);text-align:center;max-width:330px;line-height:1.7}
+
+/* ---------- CAMERA ---------- */
+#cam{position:fixed;inset:0;display:none;background:#000}
+#cam.on{display:block}
+#view{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+.topbar{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;display:flex;align-items:center;gap:8px;
+  background:linear-gradient(180deg,rgba(0,6,14,.9),transparent);z-index:5}
+.ibtn{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(2,14,26,.7);color:#dff9ff;font-size:19px;display:grid;place-items:center;backdrop-filter:blur(6px)}
+.ibtn:active{transform:scale(.94)}
+.brand{flex:1;text-align:center;font-family:'Orbitron';font-weight:900;font-size:16px;letter-spacing:.3em;color:#dff9ff;text-shadow:0 0 12px var(--c2)}
+.hud{position:absolute;top:calc(env(safe-area-inset-top) + 64px);right:12px;z-index:5;font-family:'Orbitron';font-size:9.5px;letter-spacing:.14em;line-height:2;color:rgba(191,240,255,.85);text-align:left;direction:ltr;
+  background:rgba(0,8,18,.45);padding:6px 10px;border-radius:8px;border:1px solid rgba(127,231,255,.15)}
+.hud .ok{color:#6dffb0}.hud .no{color:var(--warn)}
+.demoTag{position:absolute;top:calc(env(safe-area-inset-top) + 64px);left:12px;z-index:5;font-size:11px;color:var(--warn);border:1px solid rgba(255,211,107,.5);background:rgba(40,30,0,.5);padding:4px 10px;border-radius:8px;display:none}
+.demoTag.on{display:block}
+
+.bottom{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);
+  background:linear-gradient(0deg,rgba(0,6,14,.96) 55%,transparent)}
+.levels{display:flex;gap:6px;margin-bottom:12px}
+.lv{flex:1;border:1px solid var(--line);background:rgba(2,14,26,.6);color:rgba(207,245,255,.55);border-radius:10px;padding:7px 2px;font-size:12px;font-weight:600;transition:.25s}
+.lv.on{color:#01060d;background:var(--lvl);border-color:var(--lvl);box-shadow:0 0 16px var(--lvl)}
+.row{display:flex;gap:10px;align-items:center}
+.power{flex:1;height:54px;border-radius:14px;border:1px solid var(--lvl);color:#eafcff;font-size:16px;font-weight:800;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--lvl) 30%,transparent),rgba(2,20,36,.7));box-shadow:0 0 18px color-mix(in srgb,var(--lvl) 40%,transparent)}
+.power:active{transform:scale(.97)}
+.slider{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12px;color:rgba(191,240,255,.7)}
+.slider input{flex:1;accent-color:var(--lvl)}
+
+/* overlays */
+.ov{position:absolute;inset:0;z-index:8;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px;text-align:center;background:rgba(1,6,13,.94)}
+.ov.on{display:flex}
+.ov h3{font-size:19px;color:#dff9ff}
+.ov p{font-size:13.5px;line-height:1.8;color:rgba(191,240,255,.7);max-width:320px}
+.bar{width:220px;height:4px;border-radius:2px;background:rgba(127,231,255,.15);overflow:hidden}
+.bar i{display:block;height:100%;width:30%;background:var(--c);box-shadow:0 0 10px var(--c);animation:load 1.2s ease-in-out infinite}
+@keyframes load{0%{transform:translateX(-120%)}100%{transform:translateX(360%)}}
+.pbtn{border:1px solid var(--c);background:rgba(39,196,255,.15);color:#eafcff;border-radius:12px;padding:12px 26px;font-size:15px;font-weight:700}
+.sbtn{border:1px solid var(--line);background:none;color:rgba(207,245,255,.75);border-radius:12px;padding:10px 22px;font-size:14px}
+#flash{position:fixed;inset:0;pointer-events:none;z-index:20;opacity:0;transition:opacity .25s}
+</style>
+</head>
+<body>
+
+<!-- ============ START ============ -->
+<section id="start">
+  <div class="hero">
+    <svg viewBox="0 0 60 80" fill="none" stroke="#dff9ff" stroke-width="2.2" stroke-linecap="round">
+      <ellipse cx="30" cy="12" rx="9" ry="10"/><path d="M30 22v30M18 30q12-4 24 0M19 36q11-3 22 0M20 42q10-3 20 0M16 27l-6 22M44 27l6 22M22 55q8 5 16 0M24 57l-3 21M36 57l3 21"/>
+    </svg>
+  </div>
+  <h1>X·RAY CAM</h1>
+  <div class="sub">כוונו את המצלמה אל בן אדם — והמצלמה "תראה" דרכו. בחרו באיזו שכבה להתחיל:</div>
+  <div class="tiles">
+    <button class="tile" data-l="0"><span class="ic">🦴</span><b>שלד</b><small>רנטגן קלאסי</small></button>
+    <button class="tile" data-l="1"><span class="ic">💪</span><b>שרירים</b><small>סיבי שריר</small></button>
+    <button class="tile" data-l="2"><span class="ic">🫁</span><b>איברים</b><small>ריאות, לב, מעיים</small></button>
+    <button class="tile" data-l="3"><span class="ic">🩸</span><b>כלי דם</b><small>עורקים וורידים</small></button>
+  </div>
+  <button class="demoBtn" id="demoBtn">🎭 מצב דמו — בלי מצלמה</button>
+  <div class="note">הזיהוי רץ כולו על המכשיר, שום תמונה לא נשלחת לשום מקום. בפעם הראשונה נטען מנוע הזיהוי (כ-15MB), אז צריך אינטרנט.<br>לתוצאה הכי טובה: תאורה טובה, ורוב הגוף בתוך הפריים.</div>
+</section>
+
+<!-- ============ CAMERA ============ -->
+<section id="cam">
+  <canvas id="view"></canvas>
+  <video id="video" playsinline muted autoplay></video>
+
+  <div class="topbar">
+    <button class="ibtn" id="backBtn" title="חזרה">→</button>
+    <div class="brand">X·RAY</div>
+    <button class="ibtn" id="flipBtn" title="החלף מצלמה">⟲</button>
+    <button class="ibtn" id="shotBtn" title="צילום">📸</button>
+  </div>
+  <div class="hud" id="hud">
+    <div>LAYER: <span id="hLayer">BONE</span></div>
+    <div>BODY: <span id="hBody" class="no">SEARCHING</span></div>
+    <div>FPS: <span id="hFps">--</span></div>
+  </div>
+  <div class="demoTag" id="demoTag">🎭 מצב דמו</div>
+
+  <div class="bottom">
+    <div class="levels" id="levels">
+      <button class="lv" data-l="0">שלד</button>
+      <button class="lv" data-l="1">שרירים</button>
+      <button class="lv" data-l="2">איברים</button>
+      <button class="lv" data-l="3">כלי דם</button>
+    </div>
+    <div class="row">
+      <button class="power" id="powerBtn">⚡ הגבר עוצמה</button>
+    </div>
+    <div class="slider"><span>חלון סריקה</span><input type="range" id="winSize" min="25" max="100" value="62"><span id="winVal">62%</span></div>
+  </div>
+
+  <div class="ov" id="loadOv"><h3 id="loadTitle">מפעיל…</h3><div class="bar"><i></i></div><p id="loadText"></p></div>
+  <div class="ov" id="errOv">
+    <div style="font-size:46px">📷</div><h3 id="errTitle">אין גישה למצלמה</h3><p id="errText"></p>
+    <button class="pbtn" id="errDemo">🎭 עבור למצב דמו</button>
+    <button class="sbtn" id="errBack">→ חזרה למסך הראשי</button>
+  </div>
+</section>
+<div id="flash"></div>
+
+<script type="module">
+/* =====================================================================
+   X·RAY CAM v2 — real pose tracking (MediaPipe Pose Landmarker) +
+   body segmentation, anatomical layers anchored to real joints.
+   ===================================================================== */
+const MP_VER = '1.0.1';
+const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`;
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+
+const LEVELS = [
+  {name:'שלד',   tag:'BONE',    color:'#bfefff'},
+  {name:'שרירים', tag:'MUSCLE',  color:'#ff7a66'},
+  {name:'איברים', tag:'ORGANS',  color:'#ff9ec0'},
+  {name:'כלי דם', tag:'VESSELS', color:'#ff4d5e'},
+];
+
+const $ = id => document.getElementById(id);
+const view = $('view'), vctx = view.getContext('2d');
+const video = $('video');
+
+let level = 0, running = false, demo = false, facing = 'environment';
+let stream = null, landmarker = null, raf = 0, lastVT = -1, lastTs = 0;
+let winFrac = 0.62, winCY = 0.47;
+let lm = null, lmSeen = 0, maskReady = false, maskFromSeg = false;
+let fpsAcc = 0, fpsN = 0, fpsT = performance.now(), lowFx = false, slowFrames = 0;
+
+// work canvases (in source-pixel space)
+const mk = () => { const c = document.createElement('canvas'); return [c, c.getContext('2d')]; };
+const [xr, xctx] = mk();        // final x-ray composite
+const [body, bctx] = mk();      // soft tissue
+const [lay, lctx] = mk();       // anatomy layer
+const [bone, boctx] = mk();     // bones (for muscle/organ modes underlay)
+const [mask, mctx] = mk();      // tinted alpha mask of the body
+const [dsrc, dctx] = mk();      // demo "camera" frame
+let maskImg = null;
+
+/* ---------------- vector helpers ---------------- */
+const V = (x, y) => ({x, y});
+const add = (a, b) => V(a.x + b.x, a.y + b.y);
+const sub = (a, b) => V(a.x - b.x, a.y - b.y);
+const mul = (a, k) => V(a.x * k, a.y * k);
+const len = a => Math.hypot(a.x, a.y);
+const nrm = a => { const l = len(a) || 1; return V(a.x / l, a.y / l); };
+const perp = a => V(-a.y, a.x);
+const lerp = (a, b, t) => V(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+const dot = (a, b) => a.x * b.x + a.y * b.y;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------------- path helpers ---------------- */
+function smoothPath(c, pts, close = true) {
+  if (pts.length < 3) return;
+  c.beginPath();
+  const m0 = lerp(pts[close ? pts.length - 1 : 0], pts[0], .5);
+  if (close) c.moveTo(m0.x, m0.y); else c.moveTo(pts[0].x, pts[0].y);
+  for (let i = 0; i < pts.length - (close ? 0 : 1); i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length], m = lerp(p, q, .5);
+    if (!close && i === 0) { c.lineTo(m.x, m.y); continue; }
+    c.quadraticCurveTo(p.x, p.y, m.x, m.y);
+  }
+  if (!close) { const l = pts[pts.length - 1]; c.lineTo(l.x, l.y); }
+  if (close) c.closePath();
+}
+function strokeLine(c, pts) { smoothPath(c, pts, false); c.stroke(); }
+function ellipsePts(f, cx, cy, rx, ry, n = 18, rot = 0) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2, x = Math.cos(a) * rx, y = Math.sin(a) * ry;
+    out.push(f(cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)));
+  }
+  return out;
+}
+// segment frame: x across (in units of S), t along (0=A, 1=B)
+function seg(A, B, S) {
+  const d = sub(B, A), p = perp(nrm(d));
+  return (x, t) => add(add(A, mul(d, t)), mul(p, x * S));
+}
+
+/* =====================================================================
+   POSE → anatomical frames
+   ===================================================================== */
+const VIS = 0.45;
+function P(i) { return lm && lm[i] && lm[i].v > VIS ? lm[i] : null; }
+function Pa(i) { return lm && lm[i] ? lm[i] : null; } // any visibility
+
+function frames() {
+  const Ls = Pa(11), Rs = Pa(12), Lh = Pa(23), Rh = Pa(24);
+  if (!Ls || !Rs || !Lh || !Rh) return null;
+  const sm = lerp(Ls, Rs, .5), hm = lerp(Lh, Rh, .5);
+  const torsoLen = len(sub(hm, sm));
+  const S = Math.max(len(sub(Ls, Rs)), torsoLen * 0.62, 12);
+  // torso frame: u from -1 (person's right) to +1 (person's left), v 0=shoulders 1=hips
+  const hs = mul(sub(Ls, Rs), .5 * .78);
+  let hh = mul(sub(Lh, Rh), .5 * 1.28);
+  if (len(hh) < len(hs) * .55) hh = mul(nrm(hh.x || hh.y ? hh : hs), len(hs) * .8);
+  const T = (u, v) => lerp(add(sm, mul(hs, u)), add(hm, mul(hh, u)), v);
+  const down = nrm(sub(hm, sm));
+  // pelvis frame
+  const hx = mul(sub(Lh, Rh), .5); const hw = Math.max(len(hx), S * .28);
+  const hxu = nrm(hx);
+  let hd = perp(hxu); if (dot(hd, down) < 0) hd = mul(hd, -1);
+  const Pv = (x, y) => add(add(hm, mul(hxu, x * hw)), mul(hd, y * hw));
+  // head frame
+  const eL = Pa(7), eR = Pa(8), nose = Pa(0);
+  let hc, hW, up;
+  if (eL && eR) { hc = lerp(eL, eR, .5); hW = Math.max(len(sub(eL, eR)), S * .34); }
+  else if (nose) { hc = nose; hW = S * .38; }
+  else { hc = sub(sm, mul(down, S * .75)); hW = S * .38; }
+  const eyeL = Pa(2), eyeR = Pa(5), mL = Pa(9), mR = Pa(10);
+  if (eyeL && eyeR && mL && mR) up = nrm(sub(lerp(eyeL, eyeR, .5), lerp(mL, mR, .5)));
+  else up = mul(down, -1);
+  // blend head-up with torso-up for stability
+  up = nrm(add(mul(up, .7), mul(down, -.3)));
+  let rt = perp(up); if (dot(rt, sub(Ls, Rs)) < 0) rt = mul(rt, -1); // rt points to person's left
+  const face = nose ? clamp(dot(sub(nose, hc), rt) / hW, -.45, .45) : 0;
+  const H = (x, y) => add(add(hc, mul(rt, x * hW)), mul(up, y * hW));
+  const neckTop = H(0, -.42);
+  return {S, sm, hm, T, down, Pv, hw, hxu, hd, H, hW, face, neckTop, Ls, Rs, Lh, Rh};
+}
+
+/* =====================================================================
+   BONES
+   ===================================================================== */
+function boneStyle(c, S, a = 1) {
+  c.fillStyle = `rgba(214,238,255,${.34 * a})`;
+  c.strokeStyle = `rgba(255,255,255,${.95 * a})`;
+  c.lineWidth = Math.max(1.1, S * .011);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+}
+function fillBone(c, pts) { smoothPath(c, pts); c.fill(); c.stroke(); }
+
+// long bone with shaft + flared ends; o: {w,p0,p1,e0,e1}
+function longBone(c, A, B, S, o) {
+  const f = seg(A, B, S), n = 12, L = [], R = [];
+  const e0 = o.e0 ?? .03, e1 = o.e1 ?? .03;
+  for (let i = 0; i <= n; i++) {
+    const t = -e0 + (1 + e0 + e1) * i / n;
+    const b0 = clamp(1 - (t + e0) / .2, 0, 1), b1 = clamp(1 - (1 + e1 - t) / .2, 0, 1);
+    const h = o.w + (o.p0 - o.w) * b0 * b0 * (3 - 2 * b0) + (o.p1 - o.w) * b1 * b1 * (3 - 2 * b1);
+    L.push(f(-h, t)); R.push(f(h, t));
+  }
+  const pts = [...L, f(0, 1 + e1 + o.p1 * .25 * S / len(sub(B, A) || V(1, 0))), ...R.reverse(), f(0, -e0 - o.p0 * .25 * S / (len(sub(B, A)) || 1))];
+  fillBone(c, pts);
+  // medullary cavity (darker core → cortical look)
+  if (!o.noCore) {
+    const core = [];
+    for (let i = 0; i <= 8; i++) core.push(f(-o.w * .42, .2 + .6 * i / 8));
+    for (let i = 8; i >= 0; i--) core.push(f(o.w * .42, .2 + .6 * i / 8));
+    c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = 'rgba(0,0,0,.42)';
+    smoothPath(c, core); c.fill(); c.restore();
+  }
+}
+function circleBone(c, p, r) { c.beginPath(); c.arc(p.x, p.y, r, 0, Math.PI * 2); c.fill(); c.stroke(); }
+
+function drawSkull(c, F) {
+  const {H, face: fx, S} = F;
+  boneStyle(c, S);
+  // cranium + face outline
+  const cr = [];
+  for (let i = 0; i < 26; i++) {
+    const a = Math.PI * (-.08 + 1.16 * i / 25);
+    cr.push(H(Math.cos(a) * .62, .22 + Math.sin(a) * .74));
+  }
+  cr.push(H(-.6, .0), H(-.55, -.25), H(-.42 + fx * .2, -.42), H(fx * .6, -.5), H(.42 + fx * .2, -.42), H(.55, -.25), H(.6, .0));
+  fillBone(c, cr.reverse());
+  // mandible
+  const md = [H(-.52, -.12), H(-.5, -.52), H(-.3 + fx * .5, -.86), H(fx * .7, -.96), H(.3 + fx * .5, -.86), H(.5, -.52), H(.52, -.12),
+              H(.42, -.16), H(.4, -.5), H(.25 + fx * .5, -.74), H(fx * .7, -.8), H(-.25 + fx * .5, -.74), H(-.4, -.5), H(-.42, -.16)];
+  fillBone(c, md);
+  // holes: orbits, nasal cavity
+  c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = 'rgba(0,0,0,.78)';
+  for (const s of [-1, 1]) { smoothPath(c, ellipsePts(H, s * .27 + fx * .85, .04, .17, .15, 16)); c.fill(); }
+  smoothPath(c, [H(fx * .95, -.08), H(.1 + fx * .95, -.3), H(fx * .95, -.36), H(-.1 + fx * .95, -.3)]); c.fill();
+  c.restore();
+  // orbit rims
+  c.save(); c.strokeStyle = 'rgba(255,255,255,.9)';
+  for (const s of [-1, 1]) { smoothPath(c, ellipsePts(H, s * .27 + fx * .85, .04, .19, .17, 16)); c.stroke(); }
+  // cheekbones
+  for (const s of [-1, 1]) strokeLine(c, [H(s * .44 + fx * .4, -.12), H(s * .56, -.02), H(s * .62, .06)]);
+  // teeth
+  c.fillStyle = 'rgba(255,255,255,.85)';
+  for (const row of [-.5, -.6]) for (let k = -6; k <= 6; k++) {
+    if (k === 0) continue;
+    const x = k * .042 + fx * .75, w = Math.abs(k) < 3 ? .034 : .04;
+    smoothPath(c, [H(x - w / 2, row + .05 * Math.sign(row + .55)), H(x + w / 2, row + .05 * Math.sign(row + .55)), H(x + w / 2, row), H(x - w / 2, row)]);
+    c.fill();
+  }
+  // cranial sutures
+  c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth *= .7;
+  strokeLine(c, [H(-.5, .55), H(-.2, .72), H(.1, .78), H(.45, .6)]);
+  c.restore();
+}
+
+function vertebra(c, p, dir, w, h) {
+  const r = perp(dir);
+  const q = (x, y) => add(add(p, mul(r, x)), mul(dir, y));
+  fillBone(c, [q(-w * .5, -h * .5), q(w * .5, -h * .5), q(w * .5, h * .5), q(-w * .5, h * .5)]);
+  // transverse processes
+  c.save(); c.lineWidth *= 1.6;
+  c.beginPath(); const a = q(-w * .5, -h * .1), b = q(-w * .95, -h * .25), d = q(w * .5, -h * .1), e = q(w * .95, -h * .25);
+  c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.moveTo(d.x, d.y); c.lineTo(e.x, e.y); c.stroke(); c.restore();
+}
+
+function drawSpine(c, F, a = 1) {
+  const {T, S, neckTop} = F;
+  boneStyle(c, S, a);
+  const pts = [neckTop, T(0, .02), T(0, .32), T(0, .62), T(0, .9)];
+  // sample along polyline
+  const segs = [[0, 7, 0, 1, .07, .05], [1, 12, 1, 3, .085, .065], [3, 5, 3, 4, .12, .085]];
+  for (const [, n, i0, i1, w0, h0] of segs) {
+    for (let k = 0; k < n; k++) {
+      const t = (k + .5) / n;
+      let p, dir;
+      if (i1 - i0 === 1) { p = lerp(pts[i0], pts[i1], t); dir = nrm(sub(pts[i1], pts[i0])); }
+      else { const tt = t * 2, j = tt < 1 ? i0 : i0 + 1, lt = tt < 1 ? tt : tt - 1; p = lerp(pts[j], pts[j + 1], lt); dir = nrm(sub(pts[j + 1], pts[j])); }
+      const L = i1 - i0 === 1 ? len(sub(pts[i1], pts[i0])) : len(sub(pts[i1], pts[i0]));
+      const grow = 1 + (k / n) * .35;
+      vertebra(c, p, dir, S * w0 * grow, Math.min(L / n * .72, S * h0 * grow));
+    }
+  }
+}
+
+function drawRibcage(c, F, a = 1) {
+  const {T, S} = F;
+  boneStyle(c, S, a);
+  // sternum
+  fillBone(c, [T(-.07, .04), T(.07, .04), T(.06, .14), T(.05, .38), T(0, .44), T(-.05, .38), T(-.06, .14)]);
+  for (let i = 0; i < 12; i++) {
+    const v0 = .035 + i * .05;
+    const wMax = .5 + .32 * Math.sin(Math.PI * (i + 2) / 14);
+    for (const s of [-1, 1]) {
+      // posterior rib (bone, bright)
+      c.lineWidth = S * (.025 - i * .0005); c.strokeStyle = `rgba(255,255,255,${.85 * a})`;
+      const post = [T(s * .06, v0), T(s * wMax * .45, v0 - .012), T(s * wMax * .85, v0 + .03), T(s * wMax, v0 + .09 + i * .003)];
+      strokeLine(c, post);
+      c.lineWidth = S * .011; c.strokeStyle = `rgba(1,6,13,${.5 * a})`; strokeLine(c, post); // hollow look
+      // anterior part / costal cartilage
+      if (i < 10) {
+        const endV = i < 7 ? .06 + i * .05 : .4 + (i - 7) * .03;
+        c.lineWidth = S * .012; c.strokeStyle = `rgba(210,235,255,${.2 * a})`;
+        strokeLine(c, [T(s * wMax, v0 + .09 + i * .003), T(s * wMax * .75, v0 + .17), T(s * .3, endV + .05), T(s * .07, endV)]);
+      }
+    }
+  }
+  boneStyle(c, S, a);
+  // clavicles + scapulae
+  for (const [s, sh] of [[-1, F.Rs], [1, F.Ls]]) {
+    const st = T(s * .07, .02), f = seg(st, sh, S);
+    fillBone(c, [f(-.02, 0), f(-.035, .35), f(-.02, .7), f(-.03, 1), f(.02, 1.02), f(.015, .7), f(.02, .35), f(.02, 0)]);
+    c.save(); c.globalAlpha = .45;
+    fillBone(c, [T(s * .3, .03), lerp(sh, T(s * .8, .03), .4), T(s * .78, .12), T(s * .42, .38), T(s * .32, .2)]);
+    c.restore();
+  }
+}
+
+function drawPelvis(c, F, a = 1) {
+  const {Pv, S} = F;
+  boneStyle(c, S, a);
+  // sacrum
+  fillBone(c, [Pv(-.3, -.62), Pv(.3, -.62), Pv(.18, -.1), Pv(.04, .12), Pv(-.04, .12), Pv(-.18, -.1)]);
+  for (const s of [-1, 1]) {
+    fillBone(c, [Pv(s * .26, -.55), Pv(s * .6, -.98), Pv(s * 1.1, -1.08), Pv(s * 1.5, -.78), Pv(s * 1.38, -.32), Pv(s * 1.18, -.08),
+      Pv(s * 1.08, .2), Pv(s * .98, .45), Pv(s * .74, .66), Pv(s * .5, .6), Pv(s * .16, .5), Pv(s * .05, .38), Pv(s * .08, .2),
+      Pv(s * .32, .12), Pv(s * .36, -.1), Pv(s * .3, -.3)]);
+  }
+  c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = 'rgba(0,0,0,.8)';
+  for (const s of [-1, 1]) { smoothPath(c, ellipsePts(Pv, s * .56, .38, .2, .13, 14, s * .3)); c.fill(); }
+  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) { c.beginPath(); const p = Pv(s * .11, -.45 + k * .15); c.arc(p.x, p.y, S * .012, 0, 7); c.fill(); }
+  c.restore();
+  // pelvic brim
+  c.save(); c.strokeStyle = `rgba(255,255,255,${.6 * a})`;
+  smoothPath(c, ellipsePts(Pv, 0, -.1, .72, .48, 22)); c.stroke();
+  // acetabulum rims
+  for (const s of [-1, 1]) { c.beginPath(); const p = Pv(s, 0); c.arc(p.x, p.y, S * .1, 0, 7); c.stroke(); }
+  c.restore();
+}
+
+function drawArm(c, F, side) {
+  const {S} = F;
+  const [sh, el, wr, pk, ix, th] = side > 0 ? [11, 13, 15, 17, 19, 21] : [12, 14, 16, 18, 20, 22];
+  const A = Pa(sh), B = P(el), W = P(wr);
+  if (!A || !B) return;
+  boneStyle(c, S);
+  circleBone(c, A, S * .085);
+  longBone(c, A, B, S, {w: .042, p0: .08, p1: .085});
+  if (!W) return;
+  const f = seg(B, W, S), out = dot(perp(nrm(sub(W, B))), sub(B, F.sm)) > 0 ? 1 : -1;
+  longBone(c, f(out * .03, -.04), f(out * .045, 1), S, {w: .022, p0: .028, p1: .05});   // radius
+  longBone(c, f(-out * .035, -.1), f(-out * .03, .98), S, {w: .02, p0: .045, p1: .026}); // ulna
+  drawHand(c, S, W, P(pk), P(ix), P(th), sub(W, B));
+}
+
+function drawHand(c, S, W, pk, ix, th, fdir) {
+  const d = nrm(fdir);
+  if (!pk || !ix) { pk = add(W, add(mul(d, S * .28), mul(perp(d), S * .07))); ix = add(W, add(mul(d, S * .28), mul(perp(d), -S * .07))); }
+  const km = lerp(pk, ix, .5), hd = nrm(sub(km, W)), hl = Math.max(len(sub(km, W)), S * .15);
+  boneStyle(c, S); c.lineWidth *= .8;
+  // carpals
+  const cb = add(W, mul(hd, hl * .2));
+  for (let k = 0; k < 7; k++) {
+    const a = k / 7 * Math.PI * 2, p = add(cb, add(mul(perp(hd), Math.cos(a) * S * .045), mul(hd, Math.sin(a) * S * .03)));
+    circleBone(c, p, S * .017);
+  }
+  const lens = [[.42, .26, .19], [.47, .29, .2], [.44, .27, .19], [.34, .21, .16]];
+  for (let j = 0; j < 4; j++) {
+    const K0 = lerp(ix, pk, j / 3), K = add(K0, mul(hd, (j === 1 || j === 2 ? .06 : 0) * hl));
+    const base = add(W, add(mul(hd, hl * .32), mul(sub(K0, km), .55)));
+    longBone(c, base, K, S, {w: .011, p0: .018, p1: .02, noCore: true});
+    let p = K; const fd = nrm(add(mul(nrm(sub(K, base)), .7), mul(hd, .3)));
+    for (const L of lens[j]) { const q = add(p, mul(fd, hl * L)); longBone(c, add(p, mul(fd, S * .012)), q, S, {w: .009, p0: .014, p1: .013, noCore: true}); p = q; }
+  }
+  // thumb
+  const tb = th || add(W, add(mul(hd, hl * .5), mul(sub(ix, pk), .9)));
+  const td = nrm(sub(tb, W)), tl = hl * .9;
+  const t0 = add(W, mul(td, tl * .2)), t1 = add(W, mul(td, tl * .6)), t2 = add(t1, mul(td, tl * .38)), t3 = add(t2, mul(td, tl * .3));
+  longBone(c, t0, t1, S, {w: .013, p0: .02, p1: .02, noCore: true});
+  longBone(c, t1, t2, S, {w: .011, p0: .016, p1: .015, noCore: true});
+  longBone(c, t2, t3, S, {w: .01, p0: .014, p1: .012, noCore: true});
+}
+
+function drawLeg(c, F, side) {
+  const {S, hxu, hw, hd} = F;
+  const [hp, kn, an, he, ft] = side > 0 ? [23, 25, 27, 29, 31] : [24, 26, 28, 30, 32];
+  const Hj = Pa(hp), K = P(kn), A = P(an);
+  if (!Hj || !K) return;
+  boneStyle(c, S);
+  const out = mul(hxu, side * hw);
+  const G = add(add(Hj, mul(out, .38)), mul(hd, hw * .18));   // greater trochanter
+  circleBone(c, Hj, S * .075);
+  fillBone(c, [...[0, .5, 1].map(t => add(lerp(Hj, G, t), mul(perp(nrm(sub(G, Hj))), -S * .04))), ...[1, .5, 0].map(t => add(lerp(Hj, G, t), mul(perp(nrm(sub(G, Hj))), S * .04)))]);
+  longBone(c, lerp(Hj, G, .6), K, S, {w: .05, p0: .09, p1: .11, e0: .02});
+  // patella
+  c.save(); c.globalAlpha = .85; smoothPath(c, ellipsePts((x, y) => V(x, y), K.x, K.y, S * .055, S * .065, 14)); c.fill(); c.stroke(); c.restore();
+  if (!A) return;
+  const f = seg(K, A, S), o = dot(perp(nrm(sub(A, K))), out) > 0 ? 1 : -1;
+  longBone(c, f(-o * .012, .02), f(-o * .01, 1), S, {w: .042, p0: .1, p1: .06});      // tibia
+  longBone(c, f(o * .075, .06), f(o * .06, 1.03), S, {w: .016, p0: .03, p1: .032});   // fibula
+  const Hl = P(he), Tt = P(ft);
+  if (Hl && Tt) {
+    circleBone(c, A, S * .045);
+    longBone(c, Hl, lerp(Hl, A, .75), S, {w: .045, p0: .05, p1: .045, noCore: true}); // calcaneus
+    const fd = nrm(sub(Tt, A)), fp = perp(fd), fl = len(sub(Tt, A));
+    for (let k = -2; k <= 2; k++) {
+      const b = add(add(A, mul(fd, fl * .3)), mul(fp, k * S * .03)), e = add(add(A, mul(fd, fl * .82)), mul(fp, k * S * .045));
+      longBone(c, b, e, S, {w: .01, p0: .016, p1: .016, noCore: true});
+      longBone(c, add(e, mul(fd, S * .01)), add(e, mul(fd, fl * (k === 0 ? .22 : .17))), S, {w: .009, p0: .012, p1: .01, noCore: true});
+    }
+  }
+}
+
+function drawSkeleton(c, F, a = 1, parts = 'all') {
+  c.save(); c.globalAlpha = a;
+  if (parts === 'all' || parts === 'trunk') { drawPelvis(c, F); drawSpine(c, F); drawRibcage(c, F); }
+  if (parts === 'all') {
+    drawLeg(c, F, 1); drawLeg(c, F, -1);
+    drawArm(c, F, 1); drawArm(c, F, -1);
+    drawSkull(c, F);
+  }
+  if (parts === 'trunk') drawSkull(c, F);
+  c.restore();
+}
+
+/* =====================================================================
+   MUSCLES
+   ===================================================================== */
+function musclePaint(c, pts, S, f, x0, x1, t0, t1, fibers = 5) {
+  const g = c.createLinearGradient(pts[0].x, pts[0].y, pts[Math.floor(pts.length / 2)].x, pts[Math.floor(pts.length / 2)].y);
+  g.addColorStop(0, '#9b2621'); g.addColorStop(.5, '#e0574a'); g.addColorStop(1, '#a52b24');
+  c.fillStyle = g; smoothPath(c, pts); c.fill();
+  c.strokeStyle = 'rgba(60,5,5,.8)'; c.lineWidth = Math.max(1, S * .007); c.stroke();
+  if (f && fibers) {
+    c.save(); smoothPath(c, pts); c.clip();
+    c.strokeStyle = 'rgba(255,185,165,.33)'; c.lineWidth = Math.max(.7, S * .0045);
+    for (let k = 0; k <= fibers * 2; k++) { const x = x0 + (x1 - x0) * k / (fibers * 2); strokeLine(c, [f(x, t0), f(x * 1.08, (t0 + t1) / 2), f(x, t1)]); }
+    c.restore();
+  }
+}
+function spindle(c, S, A, B, x0, w, t0, t1, fibers = 5) {
+  const f = seg(A, B, S), n = 12, L = [], R = [];
+  for (let i = 0; i <= n; i++) {
+    const s = i / n, t = t0 + (t1 - t0) * s, h = w * Math.pow(Math.sin(Math.PI * s), .75) + w * .08;
+    L.push(f(x0 - h, t)); R.push(f(x0 + h, t));
+  }
+  const pts = [...L, ...R.reverse()];
+  musclePaint(c, pts, S, f, x0 - w, x0 + w, t0, t1, fibers);
+}
+function tendon(c, S, p, q, w = .012) { c.strokeStyle = 'rgba(240,226,205,.9)'; c.lineWidth = S * w; c.lineCap = 'round'; c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(q.x, q.y); c.stroke(); }
+function outSign(A, B, ref) { return dot(perp(nrm(sub(B, A))), sub(A, ref)) > 0 ? 1 : -1; }
+
+function drawMuscles(c, F) {
+  const {T, S, H, sm, neckTop} = F;
+  // neck & trapezius
+  for (const [s, sh] of [[-1, F.Rs], [1, F.Ls]]) {
+    const tp = [neckTop, H(s * .3, -.55), lerp(sh, H(s * .3, -.55), .35), sh, T(s * .55, .1), T(s * .12, .16)];
+    musclePaint(c, tp, S, null);
+    const e = Pa(s > 0 ? 7 : 8) || H(s * .45, -.1);
+    const scm = [];
+    const f = seg(e, T(s * .06, .02), S);
+    for (let i = 0; i <= 8; i++) scm.push(f(-.035 * Math.sin(Math.PI * i / 8) - .01, i / 8));
+    for (let i = 8; i >= 0; i--) scm.push(f(.035 * Math.sin(Math.PI * i / 8) + .01, i / 8));
+    musclePaint(c, scm, S, f, -.03, .03, 0, 1, 3);
+  }
+  // pectorals
+  for (const [s, sh] of [[-1, F.Rs], [1, F.Ls]]) {
+    const pts = [T(s * .04, .04), T(s * .5, .0), lerp(T(s * .9, .06), sh, .5), T(s * 1.02, .2), T(s * .7, .34), T(s * .35, .38), T(s * .06, .34)];
+    musclePaint(c, pts, S, null);
+    c.save(); smoothPath(c, pts); c.clip(); c.strokeStyle = 'rgba(255,185,165,.32)'; c.lineWidth = Math.max(.7, S * .005);
+    for (let k = 0; k < 14; k++) { const v = .04 + k * .024; strokeLine(c, [T(s * .05, v), T(s * .5, v * .7 + .05), T(s * .98, .18)]); }
+    c.restore();
+  }
+  // serratus
+  for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {
+    const v = .36 + k * .05; musclePaint(c, [T(s * .66, v), T(s * .84, v - .02), T(s * .86, v + .025), T(s * .7, v + .03)], S, null);
+  }
+  // obliques
+  for (const s of [-1, 1]) {
+    const pts = [T(s * .28, .46), T(s * .76, .44), T(s * .82, .7), T(s * .72, .95), T(s * .3, .98)];
+    musclePaint(c, pts, S, null);
+    c.save(); smoothPath(c, pts); c.clip(); c.strokeStyle = 'rgba(255,185,165,.3)'; c.lineWidth = Math.max(.7, S * .005);
+    for (let k = -6; k < 10; k++) strokeLine(c, [T(s * .85, .42 + k * .06), T(s * .25, .62 + k * .06)]);
+    c.restore();
+  }
+  // rectus abdominis (six-pack)
+  const rows = [[.42, .54], [.555, .66], [.665, .78], [.79, 1.0]];
+  for (const s of [-1, 1]) for (const [v0, v1] of rows) {
+    musclePaint(c, [T(s * .025, v0), T(s * .25, v0 + .01), T(s * .24, v1), T(s * .03, v1)], S, null);
+  }
+  // linea alba
+  c.strokeStyle = 'rgba(240,226,205,.8)'; c.lineWidth = S * .012; strokeLine(c, [T(0, .42), T(0, 1.0)]);
+
+  // arms
+  for (const side of [1, -1]) {
+    const [sh, el, wr] = side > 0 ? [11, 13, 15] : [12, 14, 16];
+    const A = Pa(sh), B = P(el), W = P(wr);
+    if (!A || !B) continue;
+    const o = outSign(A, B, sm);
+    spindle(c, S, A, B, o * .05, .085, .05, .92, 4);     // triceps (outer)
+    spindle(c, S, A, B, -o * .01, .095, .12, .86, 5);    // biceps
+    spindle(c, S, A, B, o * .03, .135, -.14, .46, 6);    // deltoid
+    if (W) {
+      const f = seg(B, W, S);
+      spindle(c, S, B, W, o * .035, .07, -.05, .62, 4);  // brachioradialis
+      spindle(c, S, B, W, -o * .03, .06, .02, .7, 4);    // flexors
+      for (const x of [-.03, 0, .03]) tendon(c, S, f(x, .66), f(x * .7, .98), .008);
+      c.fillStyle = 'rgba(230,120,100,.8)'; c.beginPath(); c.arc(W.x, W.y, S * .06, 0, 7); c.fill();
+    }
+  }
+  // legs
+  for (const side of [1, -1]) {
+    const [hp, kn, an] = side > 0 ? [23, 25, 27] : [24, 26, 28];
+    const A = Pa(hp), K = P(kn), N = P(an);
+    if (!A || !K) continue;
+    const o = outSign(A, K, F.hm);
+    spindle(c, S, A, K, o * .1, .1, .1, .96, 5);      // vastus lateralis
+    spindle(c, S, A, K, -o * .07, .085, .45, .98, 4);  // vastus medialis
+    spindle(c, S, A, K, -o * .1, .07, .02, .6, 3);     // adductors
+    spindle(c, S, A, K, o * .01, .12, .02, .88, 6);    // rectus femoris
+    // sartorius strap
+    const f = seg(A, K, S), sp = [];
+    for (let i = 0; i <= 10; i++) sp.push(f(o * .16 - o * .28 * i / 10 - .03, i / 10));
+    for (let i = 10; i >= 0; i--) sp.push(f(o * .16 - o * .28 * i / 10 + .03, i / 10));
+    musclePaint(c, sp, S, null);
+    tendon(c, S, f(0, .9), f(0, 1.04), .05);
+    if (N) {
+      spindle(c, S, K, N, o * .065, .085, .04, .62, 4);  // gastrocnemius lateral
+      spindle(c, S, K, N, -o * .06, .09, .05, .66, 4);   // gastrocnemius medial
+      spindle(c, S, K, N, o * .01, .05, .06, .82, 3);    // tibialis anterior
+      const g = seg(K, N, S); tendon(c, S, g(0, .7), g(0, 1), .03);
+    }
+  }
+}
+
+/* =====================================================================
+   ORGANS
+   ===================================================================== */
+function organ(c, pts, S, c1, c2, stroke = 'rgba(40,0,10,.55)') {
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const r = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * .6;
+  const g = c.createRadialGradient(cx - r * .25, cy - r * .3, r * .05, cx, cy, r);
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  c.fillStyle = g; smoothPath(c, pts); c.fill();
+  c.strokeStyle = stroke; c.lineWidth = Math.max(1, S * .008); c.stroke();
+}
+function drawOrgans(c, F, time) {
+  const {S, H, neckTop} = F; const T = (u, v) => F.T(u * 1.2, v);
+  const breath = 1 + .025 * Math.sin(time * 1.6);
+  const beat = Math.pow(Math.max(0, Math.sin(time * 7.5)), 6);
+  // brain
+  const bp = ellipsePts(H, 0, .3, .54, .5, 24);
+  organ(c, bp, S, '#ffd0dc', '#d9728f');
+  c.save(); smoothPath(c, bp); c.clip(); c.strokeStyle = 'rgba(120,30,60,.45)'; c.lineWidth = Math.max(.8, S * .006);
+  for (let k = 0; k < 9; k++) { const pts = []; for (let i = 0; i <= 20; i++) { const x = -.6 + 1.2 * i / 20; pts.push(H(x, -.1 + k * .11 + .035 * Math.sin(i * 1.7 + k * 2.1))); } strokeLine(c, pts); }
+  c.strokeStyle = 'rgba(100,20,50,.7)'; c.lineWidth = Math.max(1, S * .01); strokeLine(c, [H(0, .82), H(0, .5), H(.02, .1)]);
+  c.restore();
+  // trachea + bronchi
+  c.strokeStyle = 'rgba(245,225,230,.9)'; c.lineCap = 'round';
+  c.lineWidth = S * .05; strokeLine(c, [neckTop, T(0, .04), T(0, .14)]);
+  c.strokeStyle = 'rgba(200,170,180,.9)'; c.lineWidth = S * .012;
+  for (let k = 0; k < 9; k++) { const p = lerp(neckTop, T(0, .14), k / 9); const q = perp(nrm(sub(T(0, .14), neckTop))); c.beginPath(); c.moveTo(p.x + q.x * S * .025, p.y + q.y * S * .025); c.lineTo(p.x - q.x * S * .025, p.y - q.y * S * .025); c.stroke(); }
+  // lungs
+  const lungR = [T(-.1, .05), T(-.3, .0), T(-.6, .08), T(-.74, .28), T(-.76, .46), T(-.48, .5), T(-.2, .46), T(-.1, .3)];
+  const lungL = [T(.12, .06), T(.3, .0), T(.58, .08), T(.72, .28), T(.74, .47), T(.44, .5), T(.3, .42), T(.18, .38), T(.2, .26)];
+  for (const L of [lungR, lungL]) {
+    const cen = L.reduce((a, p) => add(a, p), V(0, 0)); const cc = mul(cen, 1 / L.length);
+    const Lb = L.map(p => add(cc, mul(sub(p, cc), breath)));
+    organ(c, Lb, S, 'rgba(255,190,200,.92)', 'rgba(205,95,120,.92)');
+    c.save(); smoothPath(c, Lb); c.clip(); c.strokeStyle = 'rgba(255,235,240,.55)'; c.lineWidth = Math.max(.8, S * .007);
+    const s = L === lungL ? 1 : -1;
+    const tree = (p, d, l, depth) => { if (depth > 4) return; const q = add(p, mul(d, l)); c.lineWidth = Math.max(.6, S * .012 / (depth + 1)); c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(q.x, q.y); c.stroke();
+      const r = .5; tree(q, nrm(add(d, mul(perp(d), r))), l * .72, depth + 1); tree(q, nrm(sub(d, mul(perp(d), r))), l * .72, depth + 1); };
+    tree(T(s * .12, .16), nrm(sub(T(s * .45, .33), T(s * .12, .16))), S * .12, 0);
+    c.restore();
+    // lobe fissures
+    c.strokeStyle = 'rgba(120,30,50,.5)'; c.lineWidth = Math.max(1, S * .007);
+    strokeLine(c, [T(s * .2, .18), T(s * .45, .3), T(s * .62, .42)]);
+  }
+  // diaphragm
+  c.strokeStyle = 'rgba(255,200,180,.35)'; c.lineWidth = S * .02; strokeLine(c, [T(-.75, .5), T(-.35, .42), T(0, .47), T(.35, .42), T(.75, .5)]);
+  // liver
+  organ(c, [T(-.72, .46), T(-.2, .43), T(.25, .47), T(.2, .54), T(-.2, .6), T(-.6, .63), T(-.76, .56)], S, '#c65a4a', '#6d1f1a');
+  // stomach
+  organ(c, [T(.12, .47), T(.4, .44), T(.6, .5), T(.58, .62), T(.4, .68), T(.2, .66), T(.24, .58), T(.4, .56), T(.34, .5), T(.16, .52)], S, '#ffc39b', '#d27a52');
+  // spleen, pancreas, kidneys
+  organ(c, ellipsePts(T, .7, .54, .07, .09, 14), S, '#b471a8', '#6a2c63');
+  organ(c, [T(-.05, .62), T(.4, .6), T(.5, .63), T(.35, .66), T(-.05, .67)], S, '#ffe19c', '#d4a74f');
+  for (const s of [-1, 1]) {
+    c.save(); c.globalAlpha = .8;
+    organ(c, [T(s * .3, .6), T(s * .45, .58), T(s * .5, .66), T(s * .45, .76), T(s * .3, .74), T(s * .34, .67)], S, '#d9705d', '#7c2a20');
+    c.restore();
+  }
+  // large intestine (frame)
+  const colon = [T(-.35, .96), T(-.58, .9), T(-.6, .72), T(-.3, .68), T(0, .7), T(.3, .68), T(.6, .72), T(.6, .9), T(.4, .98), T(.15, .96), T(0, 1.02)];
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.strokeStyle = '#8f4a33'; c.lineWidth = S * .115; strokeLine(c, colon);
+  c.strokeStyle = '#e39a73'; c.lineWidth = S * .095; strokeLine(c, colon);
+  c.strokeStyle = 'rgba(120,50,30,.55)'; c.lineWidth = S * .008; c.setLineDash([S * .01, S * .05]);
+  c.lineWidth = S * .09; c.globalAlpha = .25; strokeLine(c, colon); c.globalAlpha = 1; c.setLineDash([]);
+  // small intestine (coils)
+  const si = [];
+  for (let k = 0; k < 4; k++) for (let i = 0; i <= 40; i++) {
+    const tt = i / 40, th = tt * Math.PI * 2 * 4.5, dir = k % 2 ? -1 : 1;
+    si.push(T(dir * (-.34 + .68 * tt) + Math.cos(th) * .075 * dir, .775 + k * .052 + Math.sin(th) * .026));
+  }
+  c.strokeStyle = '#a85a40'; c.lineWidth = S * .05; strokeLine(c, si);
+  c.strokeStyle = '#ffc19e'; c.lineWidth = S * .034; strokeLine(c, si);
+  // bladder
+  organ(c, ellipsePts(T, 0, 1.06, .16, .07, 14), S, '#fff0b0', '#d3b44f');
+  // heart (on top)
+  const hc = T(.12, .31), hs = 1 + beat * .07;
+  const HT = (u, v) => add(hc, mul(sub(T(.12 + u * 2.1, .31 + v * .62), hc), hs));
+  c.strokeStyle = '#4b6cff'; c.lineWidth = S * .045; strokeLine(c, [HT(-.1, -.02), HT(-.11, -.3)]);
+  c.strokeStyle = '#8a0f1c'; c.lineWidth = S * .065; strokeLine(c, [HT(-.01, -.08), HT(-.03, -.34), HT(.05, -.42), HT(.12, -.3)]);
+  c.strokeStyle = '#e0303f'; c.lineWidth = S * .05; strokeLine(c, [HT(-.01, -.08), HT(-.03, -.34), HT(.05, -.42), HT(.12, -.3)]);
+  organ(c, [HT(-.12, -.08), HT(.02, -.12), HT(.14, -.08), HT(.24, .02), HT(.18, .12), HT(.02, .18), HT(-.1, .08)], S, '#ff5a64', '#8a0f1c', 'rgba(60,0,0,.8)');
+  c.strokeStyle = 'rgba(255,200,120,.6)'; c.lineWidth = S * .012; strokeLine(c, [HT(.03, -.1), HT(.08, .02), HT(.04, .15)]);
+  if (beat > .2) { c.save(); c.globalAlpha = beat * .5; c.shadowColor = '#ff2b40'; c.shadowBlur = S * .3;
+    smoothPath(c, [HT(-.12, -.08), HT(.14, -.08), HT(.24, .02), HT(.02, .18), HT(-.1, .08)]); c.fillStyle = 'rgba(255,60,80,.4)'; c.fill(); c.restore(); }
+}
+
+/* =====================================================================
+   VESSELS
+   ===================================================================== */
+function vesselPaths(F) {
+  const {T, S, H, neckTop} = F;
+  const art = [], vein = [];
+  const heart = T(.14, .31), arch = [heart, T(.06, .16), T(-.02, .13), T(.05, .2)];
+  const aorta = [...arch, T(.05, .5), T(.03, .8), T(0, .93)];
+  art.push({p: aorta, w: .06});
+  vein.push({p: [T(-.08, .1), T(-.07, .3), T(-.06, .6), T(-.05, .93)], w: .065}); // vena cava
+  for (const s of [-1, 1]) {
+    // carotid / jugular + head branches
+    const ear = Pa(s > 0 ? 7 : 8) || H(s * .45, -.1);
+    art.push({p: [T(s * .04, .14), T(s * .06, .03), lerp(neckTop, ear, .45), H(s * .38, -.2), H(s * .42, .25), H(s * .25, .6)], w: .03});
+    art.push({p: [H(s * .4, -.1), H(s * .2, -.45), H(s * .05, -.55)], w: .015});
+    vein.push({p: [T(s * .1, .16), T(s * .12, .03), add(lerp(neckTop, ear, .45), mul(F.down, S * .02)), H(s * .5, -.1), H(s * .5, .35)], w: .032});
+    // arms
+    const [sh, el, wr] = s > 0 ? [11, 13, 15] : [12, 14, 16];
+    const A = Pa(sh), B = P(el), W = P(wr);
+    if (A) {
+      const ap = [T(s * .05, .15), T(s * .45, .08), A]; if (B) ap.push(B); if (W) ap.push(W);
+      art.push({p: ap, w: .032, branch: true});
+      const vp = ap.map((p, i) => i === 0 ? T(s * .12, .17) : add(p, mul(perp(nrm(sub(ap[Math.min(i, ap.length - 1)], ap[i - 1]))), S * .035)));
+      vein.push({p: vp, w: .03, branch: true});
+    }
+    // renal
+    art.push({p: [T(.04, .66), T(s * .38, .67)], w: .022});
+    // legs
+    const [hp, kn, an, ft] = s > 0 ? [23, 25, 27, 31] : [24, 26, 28, 32];
+    const Hh = Pa(hp), K = P(kn), N = P(an), Ft = P(ft);
+    if (Hh) {
+      const lp = [T(0, .93), lerp(T(0, .93), Hh, .6), add(Hh, mul(F.hxu, -s * S * .04))]; if (K) lp.push(K); if (N) lp.push(N); if (N && Ft) lp.push(lerp(N, Ft, .8));
+      art.push({p: lp, w: .045, branch: true});
+      vein.push({p: lp.map((p, i) => add(p, mul(F.hxu, s * S * (i ? .05 : .02)))), w: .042, branch: true});
+    }
+  }
+  return {art, vein};
+}
+function drawVesselSet(c, S, list, col, dark, time, pulse) {
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  for (const v of list) {
+    c.strokeStyle = dark; c.lineWidth = S * v.w * 1.35; strokeLine(c, v.p);
+    c.strokeStyle = col; c.lineWidth = S * v.w; strokeLine(c, v.p);
+    if (v.branch) {
+      c.lineWidth = Math.max(.8, S * v.w * .4); c.strokeStyle = col;
+      for (let i = 1; i < v.p.length; i++) {
+        const a = v.p[i - 1], b = v.p[i], d = nrm(sub(b, a)), L = len(sub(b, a));
+        for (let k = 1; k < 5; k++) {
+          const s = k % 2 ? 1 : -1, p = lerp(a, b, k / 5), q = add(add(p, mul(d, L * .12)), mul(perp(d), s * S * .09));
+          const r = add(q, add(mul(d, L * .08), mul(perp(d), s * S * .04)));
+          strokeLine(c, [p, q, r]);
+        }
+      }
+    }
+  }
+  if (pulse) {
+    c.save(); c.setLineDash([S * .08, S * .45]); c.lineDashOffset = -time * S * 1.6;
+    c.strokeStyle = 'rgba(255,230,210,.9)'; c.shadowColor = '#ff6a6a'; c.shadowBlur = S * .08;
+    for (const v of list) { c.lineWidth = S * v.w * .45; strokeLine(c, v.p); }
+    c.restore();
+  }
+}
+function drawVessels(c, F, time) {
+  const {art, vein} = vesselPaths(F);
+  drawVesselSet(c, F.S, vein, '#4b78ff', 'rgba(10,20,80,.85)', time, false);
+  drawVesselSet(c, F.S, art, '#ff3845', 'rgba(90,0,10,.85)', time, true);
+  // heart
+  const beat = Math.pow(Math.max(0, Math.sin(time * 7.5)), 6), hc = F.T(.12, .31), hs = 1 + beat * .08;
+  const HT = (u, v) => add(hc, mul(sub(F.T(.12 + u * 1.75, .31 + v * .62), hc), hs));
+  organ(c, [HT(-.12, -.08), HT(.02, -.12), HT(.14, -.08), HT(.24, .02), HT(.18, .12), HT(.02, .18), HT(-.1, .08)], F.S, '#ff6470', '#8a0f1c');
+}
+
+/* =====================================================================
+   COMPOSITION
+   ===================================================================== */
+function sizeAll(w, h) {
+  for (const c of [xr, body, lay, bone]) if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+}
+function composeXray(src, W, Hh, F, time) {
+  const col = LEVELS[level].color;
+  // background: faint negative of the scene
+  xctx.globalCompositeOperation = 'source-over'; xctx.filter = 'none'; xctx.globalAlpha = 1;
+  xctx.fillStyle = '#020a14'; xctx.fillRect(0, 0, W, Hh);
+  xctx.globalAlpha = .28; xctx.filter = 'grayscale(1) invert(1) brightness(.45) contrast(1.3)';
+  xctx.drawImage(src, 0, 0, W, Hh); xctx.filter = 'none'; xctx.globalAlpha = 1;
+  xctx.fillStyle = level === 0 ? 'rgba(20,90,160,.22)' : 'rgba(40,20,60,.2)';
+  xctx.fillRect(0, 0, W, Hh);
+
+  if (maskReady) {
+    // soft tissue: inverted luminance, tinted, clipped to body
+    bctx.globalCompositeOperation = 'source-over'; bctx.clearRect(0, 0, W, Hh);
+    bctx.filter = 'grayscale(1) invert(1) contrast(.55) brightness(.7)'; bctx.drawImage(src, 0, 0, W, Hh); bctx.filter = 'none';
+    bctx.globalCompositeOperation = 'multiply'; bctx.fillStyle = level === 0 ? '#5fb4ff' : level === 1 ? '#ff9a8a' : level === 2 ? '#ffb0c8' : '#ff8f99';
+    bctx.fillRect(0, 0, W, Hh);
+    bctx.globalCompositeOperation = 'destination-in'; bctx.drawImage(mask, 0, 0, W, Hh);
+    xctx.globalAlpha = .55; xctx.drawImage(body, 0, 0);
+    xctx.globalCompositeOperation = 'lighter'; xctx.globalAlpha = .16; xctx.drawImage(mask, 0, 0, W, Hh);
+    if (!lowFx) { xctx.filter = `blur(${Math.max(3, W * .012)}px)`; xctx.globalAlpha = .22; xctx.drawImage(mask, 0, 0, W, Hh); xctx.filter = 'none'; }
+    xctx.globalCompositeOperation = 'source-over'; xctx.globalAlpha = 1;
+  }
+  if (!F) return;
+
+  lctx.clearRect(0, 0, W, Hh);
+  const blurPx = Math.max(2, F.S * .035);
+  if (level === 0) {
+    drawSkeleton(lctx, F);
+    xctx.globalCompositeOperation = 'lighter';
+    if (!lowFx) { xctx.filter = `blur(${blurPx}px)`; xctx.globalAlpha = .38; xctx.drawImage(lay, 0, 0); xctx.filter = 'none'; }
+    xctx.globalAlpha = .88; xctx.drawImage(lay, 0, 0);
+    xctx.globalCompositeOperation = 'source-over';
+  } else {
+    // faint bone underlay
+    boctx.clearRect(0, 0, W, Hh);
+    drawSkeleton(boctx, F, 1, level === 1 ? 'all' : 'trunk');
+    xctx.globalCompositeOperation = 'lighter'; xctx.globalAlpha = level === 1 ? .35 : .3; xctx.drawImage(bone, 0, 0);
+    xctx.globalCompositeOperation = 'source-over'; xctx.globalAlpha = 1;
+    if (level === 1) drawMuscles(lctx, F);
+    if (level === 2) drawOrgans(lctx, F, time);
+    if (level === 3) drawVessels(lctx, F, time);
+    if (!lowFx) { xctx.globalCompositeOperation = 'lighter'; xctx.filter = `blur(${blurPx * 1.2}px)`; xctx.globalAlpha = .35; xctx.drawImage(lay, 0, 0); xctx.filter = 'none'; xctx.globalCompositeOperation = 'source-over'; }
+    xctx.globalAlpha = level === 1 ? .9 : .92; xctx.drawImage(lay, 0, 0); xctx.globalAlpha = 1;
+    if (level === 1) { // bones peeking at joints
+      xctx.globalCompositeOperation = 'lighter'; xctx.globalAlpha = .18; xctx.drawImage(bone, 0, 0);
+      xctx.globalCompositeOperation = 'source-over'; xctx.globalAlpha = 1;
+    }
+  }
+}
+
+function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+function drawView(src, W, Hh, time) {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const DW = Math.round(view.clientWidth * dpr), DH = Math.round(view.clientHeight * dpr);
+  if (view.width !== DW || view.height !== DH) { view.width = DW; view.height = DH; }
+  const sc = Math.max(DW / W, DH / Hh), ox = (DW - W * sc) / 2, oy = (DH - Hh * sc) / 2;
+  const mirror = !demo && facing === 'user';
+  const put = (img, alpha = 1) => {
+    vctx.save(); vctx.globalAlpha = alpha;
+    if (mirror) { vctx.translate(DW, 0); vctx.scale(-1, 1); }
+    vctx.drawImage(img, ox, oy, W * sc, Hh * sc); vctx.restore();
+  };
+  vctx.clearRect(0, 0, DW, DH);
+  put(src);
+  // scan window
+  const mx = DW * .04, wh = DH * winFrac, wy = clamp(DH * winCY - wh / 2, 0, DH - wh), ww = DW - mx * 2, r = Math.min(26 * dpr, wh * .08);
+  vctx.save(); roundRect(vctx, mx, wy, ww, wh, r); vctx.clip(); put(xr);
+  // scan sweep
+  const sy = wy + ((time * .35) % 1) * wh;
+  const g = vctx.createLinearGradient(0, sy - 40 * dpr, 0, sy);
+  g.addColorStop(0, 'rgba(127,231,255,0)'); g.addColorStop(1, LEVELS[level].color + '55');
+  vctx.fillStyle = g; vctx.fillRect(mx, sy - 40 * dpr, ww, 40 * dpr);
+  vctx.fillStyle = LEVELS[level].color; vctx.globalAlpha = .8; vctx.fillRect(mx, sy, ww, 1.5 * dpr);
+  vctx.restore();
+  // frame + brackets
+  vctx.save();
+  vctx.strokeStyle = LEVELS[level].color; vctx.shadowColor = LEVELS[level].color; vctx.shadowBlur = 14 * dpr;
+  vctx.globalAlpha = .45; vctx.lineWidth = 1.5 * dpr; roundRect(vctx, mx, wy, ww, wh, r); vctx.stroke();
+  vctx.globalAlpha = 1; vctx.lineWidth = 3 * dpr; const b = 26 * dpr;
+  for (const [x, y, dx, dy] of [[mx, wy, 1, 1], [mx + ww, wy, -1, 1], [mx, wy + wh, 1, -1], [mx + ww, wy + wh, -1, -1]]) {
+    vctx.beginPath(); vctx.moveTo(x, y + dy * b); vctx.lineTo(x, y); vctx.lineTo(x + dx * b, y); vctx.stroke();
+  }
+  vctx.shadowBlur = 0; vctx.font = `700 ${10 * dpr}px Orbitron, sans-serif`; vctx.fillStyle = LEVELS[level].color;
+  vctx.textAlign = 'left'; vctx.fillText('X-RAY · ' + LEVELS[level].tag, mx + 12 * dpr, wy + 20 * dpr);
+  if (!lm) { vctx.textAlign = 'center'; vctx.font = `600 ${14 * dpr}px Heebo, sans-serif`; vctx.fillStyle = 'rgba(255,211,107,.95)';
+    vctx.fillText('מחפש גוף… כוונו אל בן אדם', DW / 2, wy + wh / 2); }
+  vctx.restore();
+}
+
+/* =====================================================================
+   MASK
+   ===================================================================== */
+function maskFromFloat(arr, w, h) {
+  if (mask.width !== w || mask.height !== h) { mask.width = w; mask.height = h; maskImg = null; }
+  if (!maskImg) maskImg = mctx.createImageData(w, h);
+  const d = maskImg.data;
+  for (let i = 0, j = 0; i < arr.length; i++, j += 4) {
+    const a = arr[i]; d[j] = 150; d[j + 1] = 210; d[j + 2] = 255; d[j + 3] = a > .12 ? Math.min(255, a * 300) : 0;
+  }
+  mctx.putImageData(maskImg, 0, 0);
+  maskReady = true;
+}
+// fallback silhouette from landmarks (used in demo, or if segmentation is unavailable)
+function maskFromPose(W, Hh, F) {
+  if (mask.width !== W || mask.height !== Hh) { mask.width = W; mask.height = Hh; maskImg = null; }
+  mctx.clearRect(0, 0, W, Hh);
+  if (!F) { maskReady = false; return; }
+  paintSilhouette(mctx, F, 'rgb(150,210,255)', 'rgb(150,210,255)', 'rgb(150,210,255)', 'rgb(150,210,255)');
+  maskReady = true;
+}
+function paintSilhouette(c, F, shirt, pants, skin, hair) {
+  const {S, T, H} = F;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  const limb = (a, b, w, col) => { const A = Pa(a), B = Pa(b); if (!A || !B) return; c.strokeStyle = col; c.lineWidth = S * w; c.beginPath(); c.moveTo(A.x, A.y); c.lineTo(B.x, B.y); c.stroke(); };
+  // legs
+  limb(23, 25, .36, pants); limb(24, 26, .36, pants); limb(25, 27, .26, pants); limb(26, 28, .26, pants);
+  for (const [a, b] of [[29, 31], [30, 32]]) limb(a, b, .13, '#222');
+  // torso
+  c.fillStyle = shirt; smoothPath(c, [add(F.Rs, mul(F.down, -S * .05)), add(F.Ls, mul(F.down, -S * .05)), T(1.18, .25), T(1.0, .75), T(1.08, 1.02), T(-1.08, 1.02), T(-1.0, .75), T(-1.18, .25)]); c.fill();
+  c.fillStyle = pants; smoothPath(c, [T(-1.08, .9), T(1.08, .9), T(1.12, 1.18), T(-1.12, 1.18)]); c.fill();
+  // arms
+  limb(11, 13, .24, shirt); limb(12, 14, .24, shirt); limb(13, 15, .19, skin); limb(14, 16, .19, skin);
+  for (const w of [15, 16]) { const p = Pa(w); if (p) { c.fillStyle = skin; c.beginPath(); c.arc(p.x, p.y, S * .1, 0, 7); c.fill(); } }
+  // neck + head
+  c.strokeStyle = skin; c.lineWidth = S * .2; c.beginPath(); const nt = F.neckTop, nb = T(0, .05); c.moveTo(nt.x, nt.y); c.lineTo(nb.x, nb.y); c.stroke();
+  c.fillStyle = skin; smoothPath(c, ellipsePts(H, 0, .05, .62, .92, 24)); c.fill();
+  c.fillStyle = hair; smoothPath(c, [H(-.64, .15), H(-.55, .75), H(0, 1.02), H(.55, .75), H(.64, .15), H(.5, .5), H(0, .62), H(-.5, .5)]); c.fill();
+}
+
+/* =====================================================================
+   DEMO (synthetic person, works without camera)
+   ===================================================================== */
+function demoPose(t) {
+  const W = 620, Hh = 1040, sw = Math.sin(t * .6) * 30, bob = Math.sin(t * 1.2) * 4;
+  const cx = W / 2 + sw;
+  const pt = (x, y, v = .99) => ({x, y: y + bob + 70, v});
+  const sh = 175, hip = 420;
+  const L = {};
+  L[11] = pt(cx + 70, sh); L[12] = pt(cx - 70, sh);
+  L[23] = pt(cx + 44, hip); L[24] = pt(cx - 44, hip);
+  const arm = (s, ph) => {
+    const a1 = .25 + 1.1 * (.5 + .5 * Math.sin(t * 1.1 + ph)), a2 = a1 + .15 + .9 * (.5 + .5 * Math.sin(t * 1.5 + ph + 1));
+    const S0 = s > 0 ? L[11] : L[12];
+    const E = pt(S0.x + s * Math.sin(a1) * 125, S0.y - bob - 70 + Math.cos(a1) * 125);
+    const Wr = pt(E.x + s * Math.sin(a2) * 110, E.y - bob - 70 + Math.cos(a2) * 110);
+    const d = nrm(sub(Wr, E)), p = perp(d);
+    return [E, Wr, pt(Wr.x + d.x * 34 + p.x * 14 * s, Wr.y - bob - 70 + d.y * 34 + p.y * 14 * s), pt(Wr.x + d.x * 38 - p.x * 12 * s, Wr.y - bob - 70 + d.y * 38 - p.y * 12 * s), pt(Wr.x + d.x * 22 - p.x * 26 * s, Wr.y - bob - 70 + d.y * 22 - p.y * 26 * s)];
+  };
+  [L[13], L[15], L[17], L[19], L[21]] = arm(1, 0);
+  [L[14], L[16], L[18], L[20], L[22]] = arm(-1, 2.2);
+  const kb = Math.max(0, Math.sin(t * .9)) * 18;
+  L[25] = pt(cx + 48 + kb * .3, 600 - kb * .4); L[26] = pt(cx - 48, 600);
+  L[27] = pt(cx + 50, 780); L[28] = pt(cx - 50, 780);
+  L[29] = pt(cx + 48, 800); L[30] = pt(cx - 48, 800);
+  L[31] = pt(cx + 70, 835); L[32] = pt(cx - 70, 835);
+  const hx = cx + Math.sin(t * .8) * 8, hy = 80;
+  L[0] = pt(hx + Math.sin(t * .8) * 6, hy + 8);
+  L[2] = pt(hx + 17, hy - 6); L[5] = pt(hx - 17, hy - 6); L[1] = pt(hx + 11, hy - 6); L[4] = pt(hx - 11, hy - 6); L[3] = pt(hx + 24, hy - 6); L[6] = pt(hx - 24, hy - 6);
+  L[7] = pt(cx + 38, hy - 2); L[8] = pt(cx - 38, hy - 2);
+  L[9] = pt(hx + 12, hy + 26); L[10] = pt(hx - 12, hy + 26);
+  const arr = []; for (let i = 0; i < 33; i++) arr.push(L[i]);
+  return {W, H: Hh, lm: arr};
+}
+function demoFrame(t) {
+  const d = demoPose(t);
+  if (dsrc.width !== d.W) { dsrc.width = d.W; dsrc.height = d.H; }
+  lm = d.lm; lmSeen = performance.now();
+  const W = d.W, Hh = d.H;
+  // room
+  const g = dctx.createLinearGradient(0, 0, 0, Hh); g.addColorStop(0, '#cfc5b6'); g.addColorStop(.72, '#b3a896'); g.addColorStop(.72, '#7d6a55'); g.addColorStop(1, '#5c4c3c');
+  dctx.fillStyle = g; dctx.fillRect(0, 0, W, Hh);
+  dctx.fillStyle = '#8a7358'; dctx.fillRect(W * .72, Hh * .2, W * .22, Hh * .52);
+  dctx.fillStyle = '#c9b18c'; dctx.beginPath(); dctx.arc(W * .9, Hh * .47, 5, 0, 7); dctx.fill();
+  dctx.fillStyle = '#3d6b3b'; dctx.beginPath(); dctx.ellipse(W * .12, Hh * .62, 40, 70, 0, 0, 7); dctx.fill();
+  dctx.fillStyle = '#6b4a33'; dctx.fillRect(W * .12 - 26, Hh * .68, 52, 50);
+  const F = frames();
+  if (F) paintSilhouette(dctx, F, '#2f5d8a', '#2a2a33', '#d9a47f', '#3a2a20');
+  return dsrc;
+}
+
+/* =====================================================================
+   DETECTION
+   ===================================================================== */
+async function loadModel() {
+  if (landmarker) return landmarker;
+  const {FilesetResolver, PoseLandmarker} = await import(`${MP_URL}/vision_bundle.mjs`);
+  const fileset = await FilesetResolver.forVisionTasks(`${MP_URL}/wasm`);
+  const opts = d => ({baseOptions: {modelAssetPath: MODEL_URL, delegate: d}, runningMode: 'VIDEO', numPoses: 1,
+    outputSegmentationMasks: true, minPoseDetectionConfidence: .5, minPosePresenceConfidence: .5, minTrackingConfidence: .5});
+  try { landmarker = await PoseLandmarker.createFromOptions(fileset, opts('GPU')); }
+  catch (e) { console.warn('GPU delegate failed, using CPU', e); landmarker = await PoseLandmarker.createFromOptions(fileset, opts('CPU')); }
+  return landmarker;
+}
+
+function detect(W, Hh) {
+  if (video.currentTime === lastVT) return;
+  lastVT = video.currentTime;
+  let ts = performance.now(); if (ts <= lastTs) ts = lastTs + 1; lastTs = ts;
+  try {
+    landmarker.detectForVideo(video, ts, res => {
+      const raw = res.landmarks && res.landmarks[0];
+      if (raw) {
+        const next = raw.map(p => ({x: p.x * W, y: p.y * Hh, v: p.visibility ?? 1}));
+        if (lm && lm.length === next.length) {
+          // adaptive smoothing: follow fast moves, damp jitter
+          lm = next.map((p, i) => { const o = lm[i], d = Math.hypot(p.x - o.x, p.y - o.y), k = clamp(.35 + d / (W * .05), .35, .9);
+            return {x: o.x + (p.x - o.x) * k, y: o.y + (p.y - o.y) * k, v: o.v + (p.v - o.v) * .5}; });
+        } else lm = next;
+        lmSeen = performance.now();
+      }
+      const m = res.segmentationMasks && res.segmentationMasks[0];
+      if (m) {
+        try { maskFromFloat(m.getAsFloat32Array(), m.width, m.height); maskFromSeg = true; }
+        catch (e) { maskFromSeg = false; }
+      } else maskFromSeg = false;
+    });
+  } catch (e) { console.warn('detect error', e); }
+}
+
+/* =====================================================================
+   LOOP
+   ===================================================================== */
+function loop() {
+  if (!running) return;
+  const t0 = performance.now(), time = t0 / 1000;
+  let src, W, Hh;
+  if (demo) { src = demoFrame(time); W = dsrc.width; Hh = dsrc.height; }
+  else {
+    if (video.readyState < 2 || !video.videoWidth) { raf = requestAnimationFrame(loop); return; }
+    src = video; W = video.videoWidth; Hh = video.videoHeight;
+    if (landmarker) detect(W, Hh);
+    if (lm && performance.now() - lmSeen > 450) { lm = null; }
+  }
+  sizeAll(W, Hh);
+  const F = lm ? frames() : null;
+  if (demo || !maskFromSeg) maskFromPose(W, Hh, F);
+  if (!lm) maskReady = demo ? maskReady : maskFromSeg && maskReady;
+  composeXray(src, W, Hh, F, time);
+  drawView(src, W, Hh, time);
+
+  // HUD / perf
+  const dt = performance.now() - t0; fpsN++;
+  if (dt > 45) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
+  if (slowFrames > 40 && !lowFx) { lowFx = true; console.info('low-fx mode on'); }
+  if (t0 - fpsT > 1000) {
+    $('hFps').textContent = fpsN + (lowFx ? ' ·LITE' : ''); fpsN = 0; fpsT = t0;
+    const hb = $('hBody'); hb.textContent = lm ? 'LOCKED' : 'SEARCHING'; hb.className = lm ? 'ok' : 'no';
+  }
+  raf = requestAnimationFrame(loop);
+}
+
+/* =====================================================================
+   UI / FLOW
+   ===================================================================== */
+function setLevel(l, fx = true) {
+  level = (l + LEVELS.length) % LEVELS.length;
+  document.documentElement.style.setProperty('--lvl', LEVELS[level].color);
+  document.querySelectorAll('.lv').forEach(b => b.classList.toggle('on', +b.dataset.l === level));
+  $('hLayer').textContent = LEVELS[level].tag;
+  $('powerBtn').textContent = level === LEVELS.length - 1 ? '⚡ חזרה לשלד' : '⚡ הגבר עוצמה';
+  if (fx) { const f = $('flash'); f.style.background = LEVELS[level].color; f.style.transition = 'none'; f.style.opacity = .35;
+    requestAnimationFrame(() => { f.style.transition = 'opacity .35s'; f.style.opacity = 0; }); if (navigator.vibrate) navigator.vibrate(25); }
+}
+function showOv(id, on) { $(id).classList.toggle('on', on); }
+
+async function openCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: {ideal: facing}, width: {ideal: 640}, height: {ideal: 480}}});
+  video.srcObject = stream; await video.play(); lastVT = -1;
+}
+
+async function startCam(l) {
+  demo = false; lm = null; maskReady = false; maskFromSeg = false; lowFx = false; slowFrames = 0;
+  setLevel(l, false);
+  $('start').style.display = 'none'; $('cam').classList.add('on'); $('demoTag').classList.remove('on');
+  showOv('errOv', false);
+  $('loadTitle').textContent = 'מפעיל מצלמה…'; $('loadText').textContent = 'אשרו גישה למצלמה אם הדפדפן שואל.'; showOv('loadOv', true);
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no api'), {name: 'NoApi'});
+    await openCamera();
+  } catch (e) { return camError(e); }
+  running = true; cancelAnimationFrame(raf); loop();
+  $('loadTitle').textContent = 'טוען מנוע זיהוי גוף…'; $('loadText').textContent = 'בפעם הראשונה זה לוקח כמה שניות (≈15MB). אחר כך זה נשמר בדפדפן.';
+  try { await loadModel(); showOv('loadOv', false); }
+  catch (e) {
+    console.error(e); showOv('loadOv', false);
+    $('errTitle').textContent = 'מנוע הזיהוי לא נטען';
+    $('errText').textContent = 'צריך חיבור לאינטרנט בפעם הראשונה. בדקו את החיבור ונסו שוב, או עברו למצב דמו.';
+    showOv('errOv', true);
+  }
+}
+function camError(e) {
+  console.warn('camera error', e);
+  showOv('loadOv', false);
+  const n = e && e.name;
+  const inFrame = window.self !== window.top;
+  $('errTitle').textContent = 'אין גישה למצלמה';
+  $('errText').textContent =
+    n === 'NotAllowedError' ? (inFrame ? 'התצוגה הזו חוסמת מצלמה. פתחו את האפליקציה מהכתובת שלה (למשל מ-Cloudflare Pages) בכרום.' : 'הגישה נחסמה. לחצו על סמל המנעול ליד הכתובת ← הרשאות ← מצלמה ← אפשר, ורעננו.')
+    : n === 'NotFoundError' ? 'לא נמצאה מצלמה במכשיר.'
+    : n === 'NotReadableError' ? 'המצלמה תפוסה על ידי אפליקציה אחרת. סגרו אותה ונסו שוב.'
+    : !isSecureContext ? 'מצלמה עובדת רק בכתובת מאובטחת (https). העלו את הקובץ לאתר ופתחו משם.'
+    : 'הדפדפן לא מאפשר מצלמה כאן. נסו לפתוח בכרום, מהכתובת של האפליקציה.';
+  showOv('errOv', true);
+}
+function startDemo(l = level) {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  demo = true; lm = null; lowFx = false; slowFrames = 0;
+  setLevel(l, false);
+  $('start').style.display = 'none'; $('cam').classList.add('on'); $('demoTag').classList.add('on');
+  showOv('errOv', false); showOv('loadOv', false);
+  running = true; cancelAnimationFrame(raf); loop();
+}
+function goBack() {
+  running = false; cancelAnimationFrame(raf);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null; lm = null; demo = false;
+  showOv('loadOv', false); showOv('errOv', false);
+  $('cam').classList.remove('on'); $('start').style.display = 'flex';
+}
+async function flip() {
+  if (demo) return;
+  facing = facing === 'environment' ? 'user' : 'environment';
+  try { await openCamera(); lm = null; } catch (e) { camError(e); }
+}
+function snapshot() {
+  const f = $('flash'); f.style.background = '#fff'; f.style.transition = 'none'; f.style.opacity = .8;
+  requestAnimationFrame(() => { f.style.transition = 'opacity .4s'; f.style.opacity = 0; });
+  view.toBlob(async b => {
+    if (!b) return;
+    const name = `xray-${Date.now()}.png`, file = new File([b], name, {type: 'image/png'});
+    if (navigator.canShare && navigator.canShare({files: [file]})) { try { await navigator.share({files: [file], title: 'X·RAY CAM'}); return; } catch (e) { if (e.name === 'AbortError') return; } }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  }, 'image/png');
+}
+
+document.querySelectorAll('.tile').forEach(b => b.addEventListener('click', () => startCam(+b.dataset.l)));
+$('demoBtn').addEventListener('click', () => startDemo(0));
+$('errDemo').addEventListener('click', () => startDemo(level));
+$('errBack').addEventListener('click', goBack);
+$('backBtn').addEventListener('click', goBack);
+$('flipBtn').addEventListener('click', flip);
+$('shotBtn').addEventListener('click', snapshot);
+$('powerBtn').addEventListener('click', () => setLevel(level + 1));
+document.querySelectorAll('.lv').forEach(b => b.addEventListener('click', () => setLevel(+b.dataset.l)));
+$('winSize').addEventListener('input', e => { winFrac = e.target.value / 100; $('winVal').textContent = e.target.value + '%'; });
+// drag the scan window up/down
+let dragY = null;
+view.addEventListener('pointerdown', e => { dragY = e.clientY; view.setPointerCapture(e.pointerId); });
+view.addEventListener('pointermove', e => { if (dragY === null) return; winCY = clamp(winCY + (e.clientY - dragY) / view.clientHeight, .1, .9); dragY = e.clientY; });
+view.addEventListener('pointerup', () => dragY = null);
+view.addEventListener('pointercancel', () => dragY = null);
+document.addEventListener('visibilitychange', () => { if (document.hidden && running && !demo) { /* keep stream; browser pauses rAF */ } });
+if (new URLSearchParams(location.search).has('demo')) startDemo(+(new URLSearchParams(location.search).get('l') || 0));
+window.__xray = {setLevel, startDemo};
+</script>
+</body>
+</html>
