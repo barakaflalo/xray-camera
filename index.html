@@ -1,167 +1,384 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="he" dir="rtl" data-theme="gold" data-mode="night">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#01060d">
-<title>X·RAY CAM</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="theme-color" content="#0b0b0d">
+<meta name="description" content="X·RAY CAM — מצלמת רנטגן משעשעת וחינוכית: כוונו אל יד או גוף וראו שלד, שרירים, איברים וכלי דם. הכול על המכשיר. AppNest.">
+<meta property="og:title" content="X·RAY CAM · AppNest">
+<meta property="og:description" content="כוונו את המצלמה אל יד או גוף — וראו מה יש בפנים. הדמיה משעשעת וחינוכית.">
+<meta property="og:image" content="icon-512.png">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Heebo:wght@300;400;600;800&display=swap" rel="stylesheet">
+<title>X·RAY CAM · AppNest</title>
+<script>
+/* early error log (last 10) — shown in the diagnostics report */
+(function () {
+  function log(m, f, l) { try { var k = 'xray_errors', a = JSON.parse(localStorage.getItem(k) || '[]');
+    a.push({m: String(m).slice(0, 300), f: String(f || '').split('/').pop(), l: l || 0, t: new Date().toISOString()});
+    localStorage.setItem(k, JSON.stringify(a.slice(-10))); } catch (e) {} }
+  addEventListener('error', function (e) { log(e.message, e.filename, e.lineno); });
+  addEventListener('unhandledrejection', function (e) { log('Promise: ' + (e.reason && (e.reason.message || e.reason))); });
+  /* apply saved theme before first paint */
+  try { var s = JSON.parse(localStorage.getItem('xray_settings') || '{}'), d = document.documentElement;
+    if (s.theme) d.dataset.theme = s.theme; if (s.mode) d.dataset.mode = s.mode;
+    if (s.lang === 'en') { d.lang = 'en'; d.dir = 'ltr'; } } catch (e) {}
+})();
+</script>
 <style>
-:root{
-  --c:#7fe7ff; --c2:#27c4ff; --bg:#01060d; --panel:rgba(3,16,30,.86);
-  --line:rgba(127,231,255,.28); --warn:#ffd36b; --err:#ff5d7a;
-  --lvl:#7fe7ff;
-}
+/* ===================== THEMES (5 + day/night) ===================== */
+:root,[data-theme="gold"]{--accent:#d4af37;--accent2:#f3d27a;--ink:#141005}
+[data-theme="xray"]{--accent:#5fd6ff;--accent2:#c2f2ff;--ink:#011219}
+[data-theme="emerald"]{--accent:#34d399;--accent2:#a7f3d0;--ink:#02150d}
+[data-theme="violet"]{--accent:#a78bfa;--accent2:#ddd6fe;--ink:#120a26}
+[data-theme="ruby"]{--accent:#f8717a;--accent2:#fecdd3;--ink:#1f0508}
+[data-mode="night"]{--bg:#0b0b0d;--surface:#141418;--surface2:#1c1c22;--line:rgba(255,255,255,.1);--text:#f2f0ea;--muted:#a3a097;--acText:var(--accent)}
+[data-mode="day"]{--bg:#f5f2ea;--surface:#ffffff;--surface2:#ece8de;--line:rgba(0,0,0,.13);--text:#1b1a16;--muted:#67645b;--acText:color-mix(in srgb,var(--accent) 62%,#000)}
+
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;background:var(--bg);color:var(--c);font-family:'Heebo',system-ui,sans-serif;overflow:hidden;user-select:none}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Heebo',system-ui,sans-serif;overflow:hidden}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.skip{position:absolute;top:-60px;inset-inline-start:8px;background:var(--accent);color:var(--ink);padding:8px 14px;border-radius:8px;z-index:999}
+.skip:focus{top:8px}
 .mono{font-family:'Orbitron','Heebo',sans-serif;letter-spacing:.12em}
-button{font-family:inherit;cursor:pointer}
 
-/* ---------- START ---------- */
-#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom));
-  background:radial-gradient(ellipse at 50% 30%,rgba(39,196,255,.14),transparent 60%),var(--bg);overflow-y:auto}
-#start::before{content:'';position:fixed;inset:0;pointer-events:none;
-  background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(127,231,255,.035) 3px 4px)}
-.hero{position:relative;width:132px;height:132px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;
-  box-shadow:0 0 60px rgba(39,196,255,.25),inset 0 0 40px rgba(39,196,255,.15)}
-.hero svg{width:78px;filter:drop-shadow(0 0 10px var(--c))}
-.hero::after{content:'';position:absolute;left:8%;right:8%;height:2px;background:linear-gradient(90deg,transparent,var(--c),transparent);animation:heroScan 2.6s ease-in-out infinite}
+/* ===================== SCREENS ===================== */
+.screen{position:fixed;inset:0;display:none;flex-direction:column;overflow-y:auto;
+  padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 24px);animation:fadeIn .22s ease}
+.screen.active{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.wrap{width:100%;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.bar{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.bar h2{font-size:21px;font-weight:800;flex:1}
+.back{min-height:48px;padding:0 18px;border-radius:14px;border:1.5px solid var(--accent);background:var(--surface);color:var(--acText);font-weight:800;font-size:16px}
+.back:active{transform:scale(.97)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px}
+.card h3{font-size:15px;color:var(--acText);margin-bottom:12px;font-weight:800}
+.btn{min-height:46px;padding:0 16px;border-radius:12px;border:1.5px solid var(--accent);background:transparent;color:var(--acText);font-weight:700;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.primary{background:var(--accent);color:var(--ink);border-color:var(--accent)}
+.btn.danger{border-color:#e5484d;color:#e5484d}
+.btn.full{width:100%}
+a.btn{text-decoration:none}
+.btn:active{transform:scale(.97)}
+.row{display:flex;gap:10px;align-items:center}
+.row.wrapr{flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+.field label{font-size:13px;color:var(--muted)}
+.in{min-height:46px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);padding:0 12px;color:var(--text)}
+.seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;min-height:44px;background:var(--surface2);border:none;color:var(--muted);font-weight:600}
+.seg button.on{background:var(--accent);color:var(--ink)}
+.switch{display:flex;justify-content:space-between;align-items:center;min-height:46px}
+.switch input{width:46px;height:26px;accent-color:var(--accent)}
+.muted{color:var(--muted);font-size:13px;line-height:1.7}
+.swatches{display:flex;gap:12px;flex-wrap:wrap}
+.sw{width:44px;height:44px;border-radius:50%;border:2px solid var(--line);position:relative}
+.sw.on{border-color:var(--text);box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--accent)}
+.sw[data-th="gold"]{background:linear-gradient(135deg,#0b0b0d 50%,#d4af37 50%)}
+.sw[data-th="xray"]{background:linear-gradient(135deg,#0b0b0d 50%,#5fd6ff 50%)}
+.sw[data-th="emerald"]{background:linear-gradient(135deg,#0b0b0d 50%,#34d399 50%)}
+.sw[data-th="violet"]{background:linear-gradient(135deg,#0b0b0d 50%,#a78bfa 50%)}
+.sw[data-th="ruby"]{background:linear-gradient(135deg,#0b0b0d 50%,#f8717a 50%)}
+
+/* ===================== HOME ===================== */
+.homehead{display:flex;align-items:center;gap:10px}
+.brandrow{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.logo{width:46px;height:46px;border-radius:12px;border:1px solid var(--line)}
+.brandrow h1{font-family:'Orbitron';font-weight:900;font-size:clamp(15px,4.6vw,20px);letter-spacing:.1em;color:var(--acText);white-space:nowrap}
+.brandrow small{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hicon{width:46px;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-size:19px;display:grid;place-items:center}
+.hero{position:relative;width:150px;height:150px;margin:6px auto 0;border-radius:50%;border:1.5px solid var(--accent);display:grid;place-items:center;
+  background:radial-gradient(circle,#06131d 0%,#020608 70%);box-shadow:0 0 40px color-mix(in srgb,var(--accent) 25%,transparent)}
+.hero svg{width:84px;filter:drop-shadow(0 0 8px #7fe7ff)}
+.hero::after{content:'';position:absolute;left:10%;right:10%;height:2px;background:linear-gradient(90deg,transparent,#7fe7ff,transparent);animation:heroScan 2.6s ease-in-out infinite}
 @keyframes heroScan{0%,100%{top:18%}50%{top:82%}}
-h1{font-family:'Orbitron';font-weight:900;font-size:30px;letter-spacing:.22em;color:#dff9ff;text-shadow:0 0 18px var(--c2),0 0 42px var(--c2)}
-.sub{font-size:14px;color:rgba(191,240,255,.7);text-align:center;max-width:330px;line-height:1.7}
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:360px}
-.tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 10px;color:#cff5ff;display:flex;flex-direction:column;align-items:center;gap:6px;transition:.2s}
-.tile:active{transform:scale(.97)}
-.tile .ic{font-size:30px}
-.tile b{font-size:15px;font-weight:800}
-.tile small{font-size:11px;opacity:.6}
-.tile[data-l="0"]{--tc:#bfefff}.tile[data-l="1"]{--tc:#ff7a66}.tile[data-l="2"]{--tc:#ff9ec0}.tile[data-l="3"]{--tc:#ff4d5e}
-.tile:hover{border-color:var(--tc);box-shadow:0 0 22px color-mix(in srgb,var(--tc) 35%,transparent)}
-.demoBtn{background:none;border:1px dashed rgba(255,211,107,.5);color:var(--warn);border-radius:12px;padding:10px 18px;font-size:13px}
-.note{font-size:11.5px;color:rgba(191,240,255,.5);text-align:center;max-width:330px;line-height:1.7}
+.tag{text-align:center;color:var(--muted);font-size:14px;line-height:1.7}
+.cta{min-height:64px;border-radius:18px;border:none;background:var(--accent);color:var(--ink);font-size:20px;font-weight:800;box-shadow:0 6px 24px color-mix(in srgb,var(--accent) 35%,transparent)}
+.cta:active{transform:scale(.98)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 4px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;font-weight:700}
+.tile .ic{font-size:24px}
+.tile:active{transform:scale(.96)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.big{min-height:76px;border-radius:16px;border:1.5px solid var(--accent);background:var(--surface);font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text);position:relative}
+.big:active{transform:scale(.97)}
+.count{min-width:22px;height:22px;border-radius:11px;background:var(--accent);color:var(--ink);font-size:12px;display:inline-grid;place-items:center;padding:0 6px}
+.badge{text-align:center;font-size:12px;color:var(--muted);margin-top:6px}
+.badge b{color:var(--acText);font-family:'Orbitron';letter-spacing:.1em}
 
-/* ---------- CAMERA ---------- */
-#cam{position:fixed;inset:0;display:none;background:#000}
-#cam.on{display:block}
+/* ===================== GALLERY ===================== */
+.gal{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shot{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.shot img{width:100%;aspect-ratio:3/4;object-fit:cover;display:block;background:#000}
+.shot .cap{padding:8px 10px 2px;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shot .meta{padding:0 10px 10px;font-size:11px;color:var(--muted)}
+.shot .ed{position:absolute;top:8px;inset-inline-end:8px;width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.55);color:#fff}
+.empty{text-align:center;padding:40px 16px;color:var(--muted);line-height:1.8}
+.empty .ic{font-size:46px;margin-bottom:8px}
+
+/* ===================== MODALS / TOAST ===================== */
+.modal{position:fixed;inset:0;z-index:60;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.55)}
+.modal.on{display:flex}
+.sheet{width:100%;max-width:560px;max-height:92vh;overflow-y:auto;background:var(--surface);border-radius:20px 20px 0 0;border-top:2px solid var(--accent);
+  padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);animation:up .22s ease;display:flex;flex-direction:column;gap:12px}
+@keyframes up{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+.sheet h3{font-size:18px;font-weight:800}
+.sheet img{width:100%;border-radius:12px;background:#000}
+.sheet pre{white-space:pre-wrap;font-size:12px;background:var(--surface2);border-radius:10px;padding:12px;direction:ltr;text-align:left;max-height:50vh;overflow:auto}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 22px);transform:translateX(-50%);z-index:90;display:none;align-items:center;gap:12px;
+  background:var(--surface);color:var(--text);border:1px solid var(--accent);border-radius:14px;padding:12px 16px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:92vw}
+#toast.on{display:flex}
+#toast button{background:none;border:none;color:var(--acText);font-weight:800}
+.banner{background:#3a2a00;color:#ffd36b;border:1px solid #ffd36b55;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.6}
+
+/* ===================== GUIDE ===================== */
+.guide{text-align:center;align-items:center}
+.guide .gic{font-size:54px}
+.dots{display:flex;gap:6px;justify-content:center}
+.dots i{width:8px;height:8px;border-radius:4px;background:var(--line)}
+.dots i.on{width:22px;background:var(--accent)}
+
+/* ===================== CAMERA (always dark) ===================== */
+#s-cam{padding:0;background:#000;color:#cff5ff;--lvl:#bfefff;overflow:hidden}
 #view{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-
 .topbar{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;display:flex;align-items:center;gap:8px;
   background:linear-gradient(180deg,rgba(0,6,14,.9),transparent);z-index:5}
-.ibtn{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:rgba(2,14,26,.7);color:#dff9ff;font-size:19px;display:grid;place-items:center;backdrop-filter:blur(6px)}
-.ibtn:active{transform:scale(.94)}
-.brand{flex:1;text-align:center;font-family:'Orbitron';font-weight:900;font-size:16px;letter-spacing:.3em;color:#dff9ff;text-shadow:0 0 12px var(--c2)}
-.hud{position:absolute;top:calc(env(safe-area-inset-top) + 64px);right:12px;z-index:5;font-family:'Orbitron';font-size:9.5px;letter-spacing:.14em;line-height:2;color:rgba(191,240,255,.85);text-align:left;direction:ltr;
+.cback{min-height:46px;padding:0 16px;border-radius:12px;border:1.5px solid var(--accent);background:rgba(2,14,26,.75);color:#fff;font-weight:800;font-size:15px}
+.ibtn{width:46px;height:46px;border-radius:12px;border:1px solid rgba(127,231,255,.28);background:rgba(2,14,26,.7);color:#dff9ff;font-size:19px;display:grid;place-items:center;backdrop-filter:blur(6px)}
+.ibtn:active,.cback:active{transform:scale(.94)}
+.cbrand{flex:1;text-align:center;font-family:'Orbitron';font-weight:900;font-size:15px;letter-spacing:.3em;color:#dff9ff;text-shadow:0 0 12px #27c4ff}
+.hud{position:absolute;top:calc(env(safe-area-inset-top) + 66px);right:12px;z-index:5;font-family:'Orbitron';font-size:9.5px;letter-spacing:.14em;line-height:2;color:rgba(191,240,255,.85);text-align:left;direction:ltr;
   background:rgba(0,8,18,.45);padding:6px 10px;border-radius:8px;border:1px solid rgba(127,231,255,.15)}
-.hud .ok{color:#6dffb0}.hud .no{color:var(--warn)}
-.demoTag{position:absolute;top:calc(env(safe-area-inset-top) + 64px);left:12px;z-index:5;font-size:11px;color:var(--warn);border:1px solid rgba(255,211,107,.5);background:rgba(40,30,0,.5);padding:4px 10px;border-radius:8px;display:none}
-.demoTag.on{display:block;cursor:pointer}
-
-.bottom{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);
-  background:linear-gradient(0deg,rgba(0,6,14,.96) 55%,transparent)}
+.hud .ok{color:#6dffb0}.hud .no{color:#ffd36b}
+.demoTag{position:absolute;top:calc(env(safe-area-inset-top) + 66px);left:12px;z-index:5;font-size:12px;color:#ffd36b;border:1px solid rgba(255,211,107,.5);background:rgba(40,30,0,.6);padding:7px 12px;border-radius:10px;display:none}
+.demoTag.on{display:block}
+.bottom{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);background:linear-gradient(0deg,rgba(0,6,14,.96) 55%,transparent)}
 .levels{display:flex;gap:6px;margin-bottom:12px}
-.lv{flex:1;border:1px solid var(--line);background:rgba(2,14,26,.6);color:rgba(207,245,255,.55);border-radius:10px;padding:7px 2px;font-size:12px;font-weight:600;transition:.25s}
+.lv{flex:1;border:1px solid rgba(127,231,255,.28);background:rgba(2,14,26,.6);color:rgba(207,245,255,.6);border-radius:10px;min-height:38px;font-size:13px;font-weight:700;transition:.25s}
 .lv.on{color:#01060d;background:var(--lvl);border-color:var(--lvl);box-shadow:0 0 16px var(--lvl)}
-.row{display:flex;gap:10px;align-items:center}
-.power{flex:1;height:54px;border-radius:14px;border:1px solid var(--lvl);color:#eafcff;font-size:16px;font-weight:800;
+.power{width:100%;height:56px;border-radius:14px;border:1.5px solid var(--lvl);color:#eafcff;font-size:17px;font-weight:800;
   background:linear-gradient(135deg,color-mix(in srgb,var(--lvl) 30%,transparent),rgba(2,20,36,.7));box-shadow:0 0 18px color-mix(in srgb,var(--lvl) 40%,transparent)}
 .power:active{transform:scale(.97)}
-.slider{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12px;color:rgba(191,240,255,.7)}
+.slider{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12.5px;color:rgba(191,240,255,.75)}
 .slider input{flex:1;accent-color:var(--lvl)}
-
-/* overlays */
 .ov{position:absolute;inset:0;z-index:8;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px;text-align:center;background:rgba(1,6,13,.94)}
 .ov.on{display:flex}
 .ov h3{font-size:19px;color:#dff9ff}
-.ov p{font-size:13.5px;line-height:1.8;color:rgba(191,240,255,.7);max-width:320px}
-.bar{width:220px;height:4px;border-radius:2px;background:rgba(127,231,255,.15);overflow:hidden}
-.bar i{display:block;height:100%;width:30%;background:var(--c);box-shadow:0 0 10px var(--c);animation:load 1.2s ease-in-out infinite}
+.ov p{font-size:14px;line-height:1.8;color:rgba(191,240,255,.72);max-width:320px}
+.lbar{width:220px;height:4px;border-radius:2px;background:rgba(127,231,255,.15);overflow:hidden}
+.lbar i{display:block;height:100%;width:30%;background:#7fe7ff;box-shadow:0 0 10px #7fe7ff;animation:load 1.2s ease-in-out infinite}
 @keyframes load{0%{transform:translateX(-120%)}100%{transform:translateX(360%)}}
-.pbtn{border:1px solid var(--c);background:rgba(39,196,255,.15);color:#eafcff;border-radius:12px;padding:12px 26px;font-size:15px;font-weight:700}
-.sbtn{border:1px solid var(--line);background:none;color:rgba(207,245,255,.75);border-radius:12px;padding:10px 22px;font-size:14px}
+.ov .btn{color:#eafcff;border-color:#7fe7ff}
 #flash{position:fixed;inset:0;pointer-events:none;z-index:20;opacity:0;transition:opacity .25s}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+@media (max-width:360px){.tiles{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
+<a href="#main" class="skip" data-t="skip">דלג לתוכן</a>
+<main id="main">
 
-<!-- ============ START ============ -->
-<section id="start">
-  <div class="hero">
-    <svg viewBox="0 0 60 80" fill="none" stroke="#dff9ff" stroke-width="2.2" stroke-linecap="round">
-      <ellipse cx="30" cy="12" rx="9" ry="10"/><path d="M30 22v30M18 30q12-4 24 0M19 36q11-3 22 0M20 42q10-3 20 0M16 27l-6 22M44 27l6 22M22 55q8 5 16 0M24 57l-3 21M36 57l3 21"/>
-    </svg>
+<!-- ======================= HOME ======================= -->
+<section class="screen active" id="s-home" aria-labelledby="appTitle">
+ <div class="wrap">
+  <div class="homehead">
+    <div class="brandrow"><img src="icon-192.png" class="logo" alt=""><div><h1 id="appTitle">X·RAY CAM</h1><small data-t="subtitle">מצלמת רנטגן · AppNest</small></div></div>
+    <button class="hicon" id="themeBtn" data-ta="theme" aria-label="ערכת צבע">🎨</button>
+    <button class="hicon" id="modeBtn" data-ta="mode" aria-label="יום/לילה">🌙</button>
+    <button class="hicon" id="aboutBtn" data-ta="about" aria-label="אודות">ℹ️</button>
   </div>
-  <h1>X·RAY CAM</h1>
-  <div class="sub">כוונו את המצלמה אל יד, אל פלג גוף או אל בן אדם שלם — והמצלמה "תראה" רק את מה שבפריים. בחרו באיזו שכבה להתחיל:</div>
-  <div class="tiles">
-    <button class="tile" data-l="0"><span class="ic">🦴</span><b>שלד</b><small>רנטגן קלאסי</small></button>
-    <button class="tile" data-l="1"><span class="ic">💪</span><b>שרירים</b><small>סיבי שריר</small></button>
-    <button class="tile" data-l="2"><span class="ic">🫁</span><b>איברים</b><small>ריאות, לב, מעיים</small></button>
-    <button class="tile" data-l="3"><span class="ic">🩸</span><b>כלי דם</b><small>עורקים וורידים</small></button>
+  <div id="fileBanner" class="banner" style="display:none" data-t="fileWarn"></div>
+  <div class="hero" aria-hidden="true">
+    <svg viewBox="0 0 60 80" fill="none" stroke="#dff9ff" stroke-width="2.2" stroke-linecap="round"><ellipse cx="30" cy="12" rx="9" ry="10"/><path d="M30 22v30M18 30q12-4 24 0M19 36q11-3 22 0M20 42q10-3 20 0M16 27l-6 22M44 27l6 22M22 55q8 5 16 0M24 57l-3 21M36 57l3 21"/></svg>
   </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-    <button class="demoBtn" id="demoBtn">🎭 דמו — גוף</button>
-    <button class="demoBtn" id="demoHandBtn">✋ דמו — יד</button>
+  <p class="tag" data-t="tagline">כוונו את המצלמה אל יד, פלג גוף או בן אדם שלם — וראו מה יש בפנים.</p>
+  <button class="cta" id="scanBtn" data-t="startScan">📷 התחל סריקה</button>
+  <div class="tiles" role="group" data-ta="startAt" aria-label="התחל בשכבה">
+    <button class="tile" data-l="0"><span class="ic">🦴</span><span data-t="lvBone">שלד</span></button>
+    <button class="tile" data-l="1"><span class="ic">💪</span><span data-t="lvMuscle">שרירים</span></button>
+    <button class="tile" data-l="2"><span class="ic">🫁</span><span data-t="lvOrgans">איברים</span></button>
+    <button class="tile" data-l="3"><span class="ic">🩸</span><span data-t="lvVessels">כלי דם</span></button>
   </div>
-  <div class="note">הזיהוי רץ כולו על המכשיר, שום תמונה לא נשלחת לשום מקום. בפעם הראשונה נטענים מנועי הזיהוי של הגוף והיד (כ-25MB), אז צריך אינטרנט.<br>לתוצאה הכי טובה: תאורה טובה, ורוב הגוף בתוך הפריים.</div>
+  <div class="grid2">
+    <button class="big" id="galBtn">🖼️ <span data-t="gallery">הגלריה שלי</span> <span class="count" id="galCount">0</span></button>
+    <button class="big" id="demoHomeBtn">🎭 <span data-t="demo">מצב דמו</span></button>
+    <button class="big" id="setBtn">⚙️ <span data-t="settings">הגדרות</span></button>
+    <button class="big" id="guideBtn">📖 <span data-t="guideL">מדריך</span></button>
+  </div>
+  <div class="badge"><b>AppNest</b> · <span data-t="badgeLine">הכול נשאר על המכשיר</span> · v<span class="ver"></span></div>
+ </div>
 </section>
 
-<!-- ============ CAMERA ============ -->
-<section id="cam">
-  <canvas id="view"></canvas>
+<!-- ======================= CAMERA ======================= -->
+<section class="screen" id="s-cam" aria-label="X-RAY camera">
+  <canvas id="view" aria-label="X-ray view"></canvas>
   <video id="video" playsinline muted autoplay></video>
-
   <div class="topbar">
-    <button class="ibtn" id="backBtn" title="חזרה">→</button>
-    <div class="brand">X·RAY</div>
-    <button class="ibtn" id="flipBtn" title="החלף מצלמה">⟲</button>
-    <button class="ibtn" id="shotBtn" title="צילום">📸</button>
+    <button class="cback" id="backBtn" data-t="home">→ בית</button>
+    <div class="cbrand">X·RAY</div>
+    <button class="ibtn" id="flipBtn" data-ta="flip" aria-label="החלף מצלמה">⟲</button>
+    <button class="ibtn" id="shotBtn" data-ta="snap" aria-label="צילום">📸</button>
   </div>
   <div class="hud" id="hud">
     <div>LAYER: <span id="hLayer">BONE</span></div>
-    <div>BODY: <span id="hBody" class="no">SEARCHING</span></div>
+    <div>TARGET: <span id="hBody" class="no">SEARCHING</span></div>
     <div>FPS: <span id="hFps">--</span></div>
   </div>
-  <div class="demoTag" id="demoTag" title="החלף סצנה">🎭 מצב דמו</div>
-
+  <button class="demoTag" id="demoTag">🎭</button>
   <div class="bottom">
     <div class="levels" id="levels">
-      <button class="lv" data-l="0">שלד</button>
-      <button class="lv" data-l="1">שרירים</button>
-      <button class="lv" data-l="2">איברים</button>
-      <button class="lv" data-l="3">כלי דם</button>
+      <button class="lv" data-l="0" data-t="lvBone">שלד</button>
+      <button class="lv" data-l="1" data-t="lvMuscle">שרירים</button>
+      <button class="lv" data-l="2" data-t="lvOrgans">איברים</button>
+      <button class="lv" data-l="3" data-t="lvVessels">כלי דם</button>
     </div>
-    <div class="row">
-      <button class="power" id="powerBtn">⚡ הגבר עוצמה</button>
-    </div>
-    <div class="slider"><span>חלון סריקה</span><input type="range" id="winSize" min="25" max="100" value="62"><span id="winVal">62%</span></div>
+    <button class="power" id="powerBtn">⚡</button>
+    <div class="slider"><span data-t="scanWin">חלון סריקה</span><input type="range" id="winSize" min="25" max="100" value="62" data-ta="scanWin" aria-label="חלון סריקה"><span id="winVal">62%</span></div>
   </div>
-
-  <div class="ov" id="loadOv"><h3 id="loadTitle">מפעיל…</h3><div class="bar"><i></i></div><p id="loadText"></p></div>
+  <div class="ov" id="loadOv"><h3 id="loadTitle"></h3><div class="lbar"><i></i></div><p id="loadText"></p></div>
   <div class="ov" id="errOv">
-    <div style="font-size:46px">📷</div><h3 id="errTitle">אין גישה למצלמה</h3><p id="errText"></p>
-    <button class="pbtn" id="errDemo">🎭 עבור למצב דמו</button>
-    <button class="sbtn" id="errBack">→ חזרה למסך הראשי</button>
+    <div style="font-size:46px">📷</div><h3 id="errTitle"></h3><p id="errText"></p>
+    <button class="btn" id="errDemo" data-t="toDemo">🎭 עבור למצב דמו</button>
+    <button class="btn" id="errBack" data-t="backHome">→ חזרה לדף הבית</button>
   </div>
 </section>
+
+<!-- ======================= GALLERY ======================= -->
+<section class="screen" id="s-gallery">
+ <div class="wrap">
+  <div class="bar"><button class="back" data-go="home" data-t="home">→ בית</button><h2 data-t="gallery">הגלריה שלי</h2></div>
+  <div class="gal" id="galGrid"></div>
+  <div class="empty" id="galEmpty"><div class="ic">🖼️</div><div data-t="galEmpty"></div></div>
+ </div>
+</section>
+
+<!-- ======================= SETTINGS ======================= -->
+<section class="screen" id="s-settings">
+ <div class="wrap">
+  <div class="bar"><button class="back" data-go="home" data-t="home">→ בית</button><h2 data-t="settings">הגדרות</h2></div>
+  <div class="card"><h3 data-t="profile">פרופיל</h3>
+    <div class="field"><label for="setName" data-t="userName">שם משתמש</label><input class="in" id="setName" maxlength="40" autocomplete="nickname"><div class="muted" data-t="userNameHint"></div></div>
+  </div>
+  <div class="card"><h3 data-t="display">תצוגה</h3>
+    <div class="field"><label data-t="language">שפה</label><div class="seg" id="segLang"><button data-v="he">עברית</button><button data-v="en">English</button></div></div>
+    <div class="field"><label data-t="themeL">ערכת צבע</label><div class="swatches" id="swatches"></div></div>
+    <div class="field"><label data-t="modeL">מצב</label><div class="seg" id="segMode"><button data-v="night" data-t="night">🌙 לילה</button><button data-v="day" data-t="day">☀️ יום</button></div></div>
+  </div>
+  <div class="card"><h3 data-t="camera">מצלמה</h3>
+    <div class="field"><label data-t="defCam">מצלמה בפתיחה</label><div class="seg" id="segFacing"><button data-v="environment" data-t="camBack">אחורית</button><button data-v="user" data-t="camFront">קדמית (סלפי)</button></div></div>
+    <div class="field"><label data-t="defLayer">שכבת פתיחה</label><div class="seg" id="segLayer"><button data-v="0" data-t="lvBone"></button><button data-v="1" data-t="lvMuscle"></button><button data-v="2" data-t="lvOrgans"></button><button data-v="3" data-t="lvVessels"></button></div></div>
+    <div class="field"><label data-t="perf">ביצועים</label><div class="seg" id="segPerf"><button data-v="auto" data-t="perfAuto">אוטומטי</button><button data-v="quality" data-t="perfQ">איכות</button><button data-v="lite" data-t="perfLite">חסכוני</button></div><div class="muted" data-t="perfHint"></div></div>
+    <label class="switch"><span data-t="showHud">הצג נתוני סריקה (HUD)</span><input type="checkbox" id="setHud"></label>
+    <label class="switch"><span data-t="vibrate">רטט במעבר שכבה</span><input type="checkbox" id="setVib"></label>
+  </div>
+  <div class="card"><h3 data-t="data">נתונים וגיבוי</h3>
+    <p class="muted" data-t="dataHint" style="margin-bottom:12px"></p>
+    <div class="row wrapr">
+      <button class="btn" id="expBtn" data-t="exportB">⬇️ ייצוא גיבוי</button>
+      <button class="btn" id="impBtn" data-t="importB">⬆️ שחזור מגיבוי</button>
+      <input type="file" id="impFile" accept="application/json,.json" hidden>
+    </div>
+    <p class="muted" id="persistLine" style="margin-top:10px"></p>
+    <button class="btn danger full" id="wipeBtn" style="margin-top:12px" data-t="wipe">🗑️ מחיקת הכול</button>
+  </div>
+  <div class="card"><h3 data-t="help">עזרה</h3>
+    <div class="row wrapr"><button class="btn" data-open-guide data-t="guide">📖 מדריך</button><button class="btn" id="diagBtn" data-t="diag">🩺 דוח אבחון</button><button class="btn" data-go="about" data-t="about">ℹ️ אודות</button></div>
+  </div>
+  <div class="badge">X·RAY CAM · v<span class="ver"></span> · <b>AppNest</b></div>
+ </div>
+</section>
+
+<!-- ======================= ABOUT ======================= -->
+<section class="screen" id="s-about">
+ <div class="wrap">
+  <div class="bar"><button class="back" data-go="home" data-t="home">→ בית</button><h2 data-t="about">אודות</h2></div>
+  <div class="card" style="text-align:center">
+    <img src="icon-192.png" alt="" style="width:84px;height:84px;border-radius:20px;margin:0 auto 10px;display:block">
+    <div class="mono" style="font-weight:900;font-size:20px;color:var(--acText)">X·RAY CAM</div>
+    <div class="muted">v<span class="ver"></span></div>
+  </div>
+  <div class="card"><h3 data-t="details">פרטים</h3>
+    <div class="muted" id="aboutDetails"></div>
+  </div>
+  <div class="card">
+    <div class="row wrapr">
+      <a class="btn" href="https://appnest-store.pages.dev" target="_blank" rel="noopener" data-t="store">🏪 חנות AppNest</a>
+      <button class="btn" id="shareAppBtn" data-t="shareApp">📤 שתף את האפליקציה</button>
+      <a class="btn" href="mailto:appnest55@gmail.com?subject=X%C2%B7RAY%20CAM" data-t="feedback">✉️ שלח משוב</a>
+      <button class="btn" data-open-guide data-t="guide">📖 מדריך</button>
+      <a class="btn" href="privacy_policy.html" target="_blank" rel="noopener" data-t="privacy">🔒 מדיניות פרטיות</a>
+    </div>
+  </div>
+  <div class="card"><h3 data-t="disclaimerT">הבהרה חשובה</h3><p class="muted" data-t="disclaimer"></p></div>
+  <div class="card"><h3 data-t="credits">קרדיטים</h3><p class="muted" data-t="creditsText"></p></div>
+  <div class="badge">© AppNest 2026 · <b>AppNest</b></div>
+ </div>
+</section>
+</main>
+
+<!-- ======================= MODALS ======================= -->
+<div class="modal" id="mTheme" role="dialog" aria-modal="true"><div class="sheet">
+  <h3 data-t="themeL">ערכת צבע</h3><div class="swatches" id="swatches2"></div>
+  <div class="seg" id="segMode2"><button data-v="night" data-t="night">🌙 לילה</button><button data-v="day" data-t="day">☀️ יום</button></div>
+  <button class="btn full" data-close data-t="close">סגור</button>
+</div></div>
+
+<div class="modal" id="mView" role="dialog" aria-modal="true"><div class="sheet">
+  <img id="vImg" alt="">
+  <h3 id="vCap"></h3><div class="muted" id="vMeta"></div>
+  <div class="row wrapr"><button class="btn primary" id="vShare" data-t="share">📤 שתף</button><button class="btn" id="vSave" data-t="download">⬇️ הורד</button><button class="btn" id="vEdit" data-t="edit">✏️ ערוך</button></div>
+  <button class="btn full" data-close data-t="close">סגור</button>
+</div></div>
+
+<div class="modal" id="mEdit" role="dialog" aria-modal="true"><div class="sheet">
+  <h3 data-t="editShot">עריכת צילום</h3>
+  <div class="field"><label for="eCap" data-t="caption">כותרת</label><input class="in" id="eCap" maxlength="60"></div>
+  <div class="row"><button class="btn primary" id="eSave" style="flex:1" data-t="save">שמור</button><button class="btn" data-close style="flex:1" data-t="cancel">ביטול</button></div>
+  <button class="btn danger full" id="eDel" data-t="del">🗑️ מחק צילום</button>
+</div></div>
+
+<div class="modal" id="mConfirm" role="dialog" aria-modal="true"><div class="sheet">
+  <h3 id="cTitle"></h3><p class="muted" id="cText"></p>
+  <div class="row"><button class="btn danger" id="cYes" style="flex:1"></button><button class="btn" id="cNo" style="flex:1" data-t="cancel">ביטול</button></div>
+</div></div>
+
+<div class="modal" id="mDiag" role="dialog" aria-modal="true"><div class="sheet">
+  <h3 data-t="diag">דוח אבחון</h3><p class="muted" data-t="diagHint"></p><pre id="diagText"></pre>
+  <div class="row"><button class="btn primary" id="diagCopy" style="flex:1" data-t="copy">📋 העתק</button><button class="btn" data-close style="flex:1" data-t="close">סגור</button></div>
+</div></div>
+
+<div class="modal" id="mGuide" role="dialog" aria-modal="true"><div class="sheet guide">
+  <div class="gic" id="gIc"></div><h3 id="gTitle"></h3><p class="muted" id="gText"></p>
+  <div class="dots" id="gDots"></div>
+  <div class="row" style="width:100%"><button class="btn" id="gSkip" style="flex:1" data-t="skipG">דלג</button><button class="btn primary" id="gNext" style="flex:1"></button></div>
+</div></div>
+
+<div id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button id="toastAct"></button></div>
 <div id="flash"></div>
 
 <script type="module">
-/* =====================================================================
-   X·RAY CAM v2 — real pose tracking (MediaPipe Pose Landmarker) +
-   body segmentation, anatomical layers anchored to real joints.
-   ===================================================================== */
+/* X·RAY CAM — AppNest · single-file PWA · engine + shell */
 const MP_VER = '1.0.1';
 const MP_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`;
 const HAND_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 
 const LEVELS = [
-  {name:'שלד',   tag:'BONE',    color:'#bfefff'},
-  {name:'שרירים', tag:'MUSCLE',  color:'#ff7a66'},
-  {name:'איברים', tag:'ORGANS',  color:'#ff9ec0'},
-  {name:'כלי דם', tag:'VESSELS', color:'#ff4d5e'},
+  {name:'lvBone', tag:'BONE',    color:'#bfefff'},
+  {name:'lvMuscle', tag:'MUSCLE',  color:'#ff7a66'},
+  {name:'lvOrgans', tag:'ORGANS',  color:'#ff9ec0'},
+  {name:'lvVessels', tag:'VESSELS', color:'#ff4d5e'},
 ];
 
 const $ = id => document.getElementById(id);
@@ -1031,14 +1248,14 @@ function drawView(src, W, Hh, time, F) {
   vctx.shadowBlur = 0; vctx.font = `700 ${10 * dpr}px Orbitron, sans-serif`; vctx.fillStyle = LEVELS[level].color;
   vctx.textAlign = 'left'; vctx.fillText('X-RAY · ' + LEVELS[level].tag, mx + 12 * dpr, wy + 20 * dpr);
   const msg = (l1, l2) => {
-    vctx.textAlign = 'center'; vctx.font = `700 ${14 * dpr}px Heebo, sans-serif`;
+    vctx.textAlign = 'center'; vctx.font = `700 ${14 * dpr}px Heebo, sans-serif`; vctx.direction = document.dir;
     const w = Math.max(vctx.measureText(l1).width, l2 ? vctx.measureText(l2).width : 0) + 32 * dpr, cy = wy + wh / 2;
     vctx.fillStyle = 'rgba(0,8,18,.72)'; roundRect(vctx, DW / 2 - w / 2, cy - 24 * dpr, w, (l2 ? 54 : 34) * dpr, 10 * dpr); vctx.fill();
     vctx.fillStyle = 'rgba(255,211,107,.98)'; vctx.fillText(l1, DW / 2, cy - 2 * dpr);
     if (l2) { vctx.font = `400 ${12 * dpr}px Heebo, sans-serif`; vctx.fillStyle = 'rgba(207,245,255,.8)'; vctx.fillText(l2, DW / 2, cy + 18 * dpr); }
   };
-  if (!F && !hands.length) msg('מחפש… כוונו אל גוף או אל יד', 'רגל לבד? צריך שגם הגוף העליון ייכנס לפריים');
-  else if (level === 2 && !(F && (F.torso || F.head))) msg('האיברים נמצאים בחזה ובבטן', 'כוונו לשם, או בחרו שכבה אחרת');
+  if (!F && !hands.length) msg(T('msgSearch'), T('msgSearch2'));
+  else if (level === 2 && !(F && (F.torso || F.head))) msg(T('msgOrg'), T('msgOrg2'));
   vctx.restore();
 }
 
@@ -1266,7 +1483,7 @@ function loop() {
   // HUD / perf
   const dt = performance.now() - t0; fpsN++;
   if (dt > 45) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
-  if (slowFrames > 40 && !lowFx) { lowFx = true; console.info('low-fx mode on'); }
+  if (slowFrames > 40 && !lowFx && SET.perf === 'auto') { lowFx = true; console.info('low-fx mode on'); }
   if (t0 - fpsT > 1000) {
     $('hFps').textContent = fpsN + (lowFx ? ' ·LITE' : ''); fpsN = 0; fpsT = t0;
     const hb = $('hBody'), on = !!(lm || hands.length); hb.textContent = lm && hands.length ? 'BODY+HAND' : lm ? 'BODY' : hands.length ? 'HAND×' + hands.length : 'SEARCHING'; hb.className = on ? 'ok' : 'no';
@@ -1274,114 +1491,482 @@ function loop() {
   raf = requestAnimationFrame(loop);
 }
 
+
 /* =====================================================================
-   UI / FLOW
+   APPNEST SHELL — i18n · settings · gallery (IndexedDB) · navigation
    ===================================================================== */
+const VERSION = '1.0.0';
+const APP_ID = 'xraycam';
+
+/* ---------------- i18n (he / en) ---------------- */
+const LANG = {
+he: {
+  skip: 'דלג לתוכן', subtitle: 'מצלמת רנטגן · AppNest', theme: 'ערכת צבע', mode: 'יום/לילה', about: 'אודות',
+  tagline: 'כוונו את המצלמה אל יד, פלג גוף או בן אדם שלם — וראו מה יש בפנים.',
+  startScan: '📷 התחל סריקה', startAt: 'התחל בשכבה', gallery: 'הגלריה שלי', demo: 'מצב דמו', settings: 'הגדרות', guide: '📖 מדריך', guideL: 'מדריך',
+  badgeLine: 'הכול נשאר על המכשיר', home: '→ בית', backHome: '→ חזרה לדף הבית', toDemo: '🎭 עבור למצב דמו',
+  lvBone: 'שלד', lvMuscle: 'שרירים', lvOrgans: 'איברים', lvVessels: 'כלי דם',
+  power: '⚡ הגבר עוצמה', powerBack: '⚡ חזרה לשלד', scanWin: 'חלון סריקה', flip: 'החלף מצלמה', snap: 'צילום',
+  msgSearch: 'מחפש… כוונו אל גוף או אל יד', msgSearch2: 'רגל לבד? צריך שגם הגוף העליון ייכנס לפריים',
+  msgOrg: 'האיברים נמצאים בחזה ובבטן', msgOrg2: 'כוונו לשם, או בחרו שכבה אחרת',
+  scBody: '🎭 דמו: גוף מלא', scClose: '🎭 דמו: קרוב', scHand: '🎭 דמו: יד',
+  loadCam: 'מפעיל מצלמה…', loadCamT: 'אשרו גישה למצלמה אם הדפדפן שואל.',
+  loadModel: 'טוען מנועי זיהוי…', loadModelT: 'בפעם הראשונה זה לוקח כמה שניות (כ-25MB). אחר כך זה נשמר במכשיר ועובד מהר.',
+  errCam: 'אין גישה למצלמה', errModel: 'מנוע הזיהוי לא נטען',
+  errModelT: 'צריך חיבור לאינטרנט בפעם הראשונה. בדקו את החיבור ונסו שוב, או עברו למצב דמו.',
+  errDenied: 'הגישה למצלמה נחסמה. לחצו על סמל המנעול ליד הכתובת ← הרשאות ← מצלמה ← אפשר, ורעננו.',
+  errFrame: 'התצוגה הזו חוסמת מצלמה. פתחו את האפליקציה מהכתובת שלה בכרום.',
+  errNoCam: 'לא נמצאה מצלמה במכשיר.', errBusy: 'המצלמה תפוסה על ידי אפליקציה אחרת. סגרו אותה ונסו שוב.',
+  errInsecure: 'מצלמה עובדת רק בכתובת מאובטחת (https). פתחו את האפליקציה מהכתובת שלה.',
+  errOther: 'הדפדפן לא מאפשר מצלמה כאן. נסו לפתוח בכרום, מהכתובת של האפליקציה.',
+  saved: 'הצילום נשמר בגלריה', share: '📤 שתף', download: '⬇️ הורד', edit: '✏️ ערוך', close: 'סגור', cancel: 'ביטול', save: 'שמור',
+  editShot: 'עריכת צילום', caption: 'כותרת', del: '🗑️ מחק צילום', delQ: 'למחוק את הצילום?', delT: 'אי אפשר לשחזר אחרי מחיקה (אלא מגיבוי).', delYes: 'מחק',
+  galEmpty: 'עוד אין צילומים.<br>בזמן סריקה לחצו על 📸 — הצילום יישמר כאן, על המכשיר בלבד.',
+  shareText: 'צילום רנטגן מ-X·RAY CAM', by: 'מאת', shotDefault: 'צילום רנטגן',
+  profile: 'פרופיל', userName: 'שם משתמש', userNameHint: 'השם מופיע על כל צילום ששומרים או משתפים, כדי שיהיה ברור ממי הוא.',
+  display: 'תצוגה', language: 'שפה', themeL: 'ערכת צבע', modeL: 'מצב', night: '🌙 לילה', day: '☀️ יום',
+  camera: 'מצלמה', defCam: 'מצלמה בפתיחה', camBack: 'אחורית', camFront: 'קדמית (סלפי)', defLayer: 'שכבת פתיחה',
+  perf: 'ביצועים', perfAuto: 'אוטומטי', perfQ: 'איכות', perfLite: 'חסכוני',
+  perfHint: 'אוטומטי עובר לבד למצב חסכוני כשהטלפון מתקשה. חסכוני מוותר על אפקט הזוהר ומריץ את הזיהוי לסירוגין.',
+  showHud: 'הצג נתוני סריקה (HUD)', vibrate: 'רטט במעבר שכבה',
+  data: 'נתונים וגיבוי', dataHint: 'הצילומים וההגדרות שמורים רק בטלפון הזה. גיבוי הוא קובץ אחד שאפשר לשמור ולשחזר ממנו בכל מכשיר.',
+  exportB: '⬇️ ייצוא גיבוי', importB: '⬆️ שחזור מגיבוי', wipe: '🗑️ מחיקת הכול',
+  persistOk: '✓ הדפדפן התבקש לא למחוק את הנתונים אוטומטית.', persistNo: 'הדפדפן עלול לפנות את הנתונים כשאין מקום — מומלץ לגבות מדי פעם.',
+  expDone: 'קובץ הגיבוי נוצר', impQ: 'לשחזר מהגיבוי?', impT: 'השחזור מחליף את כל הצילומים וההגדרות הנוכחיים.', impYes: 'שחזר',
+  impDone: 'השחזור הושלם', impBad: 'הקובץ הזה אינו גיבוי של X·RAY CAM',
+  wipeQ: 'למחוק את הכול?', wipeT: 'כל הצילומים וההגדרות יימחקו מהמכשיר.', wipeYes: 'כן, המשך',
+  wipeQ2: 'בטוח לגמרי?', wipeT2: 'זה הצעד האחרון. בלי קובץ גיבוי אין דרך לשחזר.', wipeYes2: 'מחק הכול', wiped: 'הכול נמחק',
+  help: 'עזרה', diag: '🩺 דוח אבחון', diagHint: 'הדוח לא כולל תמונות. אפשר להעתיק ולשלוח במשוב אם משהו לא עובד.', copy: '📋 העתק', copied: 'הועתק',
+  details: 'פרטים', store: '🏪 חנות AppNest', shareApp: '📤 שתף את האפליקציה', feedback: '✉️ שלח משוב', privacy: '🔒 מדיניות פרטיות',
+  detailsHtml: 'גרסה {v}<br>פותח: Barak Aflalo<br>פלטפורמה: PWA · HTML5<br>אחסון: על המכשיר בלבד<br>רישיון: © AppNest 2026',
+  disclaimerT: 'הבהרה חשובה',
+  disclaimer: 'X·RAY CAM היא אפליקציה משעשעת וחינוכית. היא לא מצלמת רנטגן אמיתי ולא רואה דרך הגוף: המצלמה מזהה את מיקום המפרקים, והאפליקציה מציירת עליהם איור אנטומי מוערך. זו לא בדיקה רפואית ואין להסיק ממנה שום דבר רפואי.',
+  credits: 'קרדיטים', creditsText: 'זיהוי גוף וידיים: MediaPipe של Google (רישיון Apache 2.0). האיורים האנטומיים מצוירים בקוד של האפליקציה.',
+  shareAppText: 'X·RAY CAM — מצלמת רנטגן משעשעת. כוונו אל יד או גוף וראו מה בפנים!',
+  fileWarn: '⚠️ האפליקציה נפתחה מקובץ מקומי. המצלמה, ההתקנה והעבודה בלי אינטרנט לא יעבדו כך — פתחו אותה מהכתובת שלה ב-pages.dev.',
+  update: 'גרסה חדשה מוכנה', refresh: 'רענן', storageFail: 'השמירה נכשלה — ייתכן שאין מספיק מקום במכשיר',
+  skipG: 'דלג', next: 'הבא', done: 'יאללה, מתחילים!',
+  g1t: 'ברוכים הבאים ל-X·RAY CAM', g1: 'מצלמת "רנטגן" משעשעת: כוונו את הטלפון אל יד או גוף, וראו שלד, שרירים, איברים וכלי דם — כאילו המצלמה רואה דרך העור.',
+  g2t: 'מה שבפריים — זה מה שרואים', g2: 'כוונו אל יד — ותראו את עצמות היד והאצבעות. אל פלג גוף עליון — כתפיים, צלעות וזרועות. אל בן אדם שלם — את כל השלד. רצוי תאורה טובה.',
+  g3t: 'הגבירו עוצמה', g3: 'הכפתור ⚡ מעביר בין 4 שכבות: שלד ← שרירים ← איברים ← כלי דם. אפשר גם ללחוץ ישר על שם השכבה.',
+  g4t: 'חלון הסריקה', g4: 'בתוך החלון רואים "רנטגן", ומחוצה לו את התמונה הרגילה. משנים גודל בסליידר, ומזיזים למעלה ולמטה עם האצבע.',
+  g5t: 'צלמו ושתפו', g5: 'לחיצה על 📸 שומרת את התמונה בגלריה שלכם, עם השם שלכם עליה. משם אפשר לשתף, להוריד ולערוך כותרת.',
+  g6t: 'פרטיות', g6: 'הכול רץ על הטלפון: שום תמונה לא נשלחת לשום מקום. בפעם הראשונה נטענים מנועי הזיהוי (כ-25MB) — אחר כך זה עובד גם בלי אינטרנט. זו הדמיה לצורכי כיף ולמידה, לא בדיקה רפואית.',
+},
+en: {
+  skip: 'Skip to content', subtitle: 'X-ray camera · AppNest', theme: 'Color theme', mode: 'Day/Night', about: 'About',
+  tagline: 'Point the camera at a hand, an upper body or a whole person — and see what\'s inside.',
+  startScan: '📷 Start scanning', startAt: 'Start at layer', gallery: 'My gallery', demo: 'Demo mode', settings: 'Settings', guide: '📖 Guide', guideL: 'Guide',
+  badgeLine: 'everything stays on your device', home: '← Home', backHome: '← Back to home', toDemo: '🎭 Switch to demo',
+  lvBone: 'Bones', lvMuscle: 'Muscles', lvOrgans: 'Organs', lvVessels: 'Vessels',
+  power: '⚡ More power', powerBack: '⚡ Back to bones', scanWin: 'Scan window', flip: 'Switch camera', snap: 'Snapshot',
+  msgSearch: 'Searching… point at a body or a hand', msgSearch2: 'Just a leg? The upper body must be in frame too',
+  msgOrg: 'Organs are in the chest and belly', msgOrg2: 'Point there, or pick another layer',
+  scBody: '🎭 Demo: full body', scClose: '🎭 Demo: close-up', scHand: '🎭 Demo: hand',
+  loadCam: 'Starting camera…', loadCamT: 'Allow camera access if the browser asks.',
+  loadModel: 'Loading detection engines…', loadModelT: 'The first time takes a few seconds (~25MB). After that it\'s stored on the device and fast.',
+  errCam: 'No camera access', errModel: 'Detection engine failed to load',
+  errModelT: 'An internet connection is needed the first time. Check it and try again, or switch to demo mode.',
+  errDenied: 'Camera access was blocked. Tap the lock icon by the address → Permissions → Camera → Allow, then reload.',
+  errFrame: 'This view blocks the camera. Open the app from its own address in Chrome.',
+  errNoCam: 'No camera was found on this device.', errBusy: 'The camera is in use by another app. Close it and try again.',
+  errInsecure: 'The camera only works on a secure (https) address. Open the app from its address.',
+  errOther: 'The browser doesn\'t allow the camera here. Try Chrome, from the app\'s address.',
+  saved: 'Saved to gallery', share: '📤 Share', download: '⬇️ Download', edit: '✏️ Edit', close: 'Close', cancel: 'Cancel', save: 'Save',
+  editShot: 'Edit snapshot', caption: 'Title', del: '🗑️ Delete snapshot', delQ: 'Delete this snapshot?', delT: 'It can\'t be recovered (except from a backup).', delYes: 'Delete',
+  galEmpty: 'No snapshots yet.<br>While scanning, tap 📸 — the picture is saved here, on this device only.',
+  shareText: 'An X-ray from X·RAY CAM', by: 'by', shotDefault: 'X-ray snapshot',
+  profile: 'Profile', userName: 'User name', userNameHint: 'Your name is stamped on every snapshot you save or share, so it\'s clear who it\'s from.',
+  display: 'Display', language: 'Language', themeL: 'Color theme', modeL: 'Mode', night: '🌙 Night', day: '☀️ Day',
+  camera: 'Camera', defCam: 'Camera on start', camBack: 'Rear', camFront: 'Front (selfie)', defLayer: 'Starting layer',
+  perf: 'Performance', perfAuto: 'Auto', perfQ: 'Quality', perfLite: 'Lite',
+  perfHint: 'Auto switches to Lite by itself when the phone struggles. Lite skips the glow effect and alternates detection.',
+  showHud: 'Show scan data (HUD)', vibrate: 'Vibrate on layer change',
+  data: 'Data & backup', dataHint: 'Snapshots and settings live only on this phone. A backup is a single file you can restore on any device.',
+  exportB: '⬇️ Export backup', importB: '⬆️ Restore backup', wipe: '🗑️ Delete everything',
+  persistOk: '✓ The browser was asked not to clear this data automatically.', persistNo: 'The browser may clear data when space runs low — back up from time to time.',
+  expDone: 'Backup file created', impQ: 'Restore from backup?', impT: 'Restoring replaces all current snapshots and settings.', impYes: 'Restore',
+  impDone: 'Restore complete', impBad: 'This file is not an X·RAY CAM backup',
+  wipeQ: 'Delete everything?', wipeT: 'All snapshots and settings will be removed from this device.', wipeYes: 'Yes, continue',
+  wipeQ2: 'Absolutely sure?', wipeT2: 'This is the last step. Without a backup file there\'s no way back.', wipeYes2: 'Delete all', wiped: 'Everything was deleted',
+  help: 'Help', diag: '🩺 Diagnostics', diagHint: 'The report contains no images. Copy it and send it with feedback if something doesn\'t work.', copy: '📋 Copy', copied: 'Copied',
+  details: 'Details', store: '🏪 AppNest store', shareApp: '📤 Share the app', feedback: '✉️ Send feedback', privacy: '🔒 Privacy policy',
+  detailsHtml: 'Version {v}<br>Developer: Barak Aflalo<br>Platform: PWA · HTML5<br>Storage: on this device only<br>License: © AppNest 2026',
+  disclaimerT: 'Important',
+  disclaimer: 'X·RAY CAM is a fun, educational app. It does not take real X-rays and cannot see through the body: the camera detects where the joints are and the app draws an estimated anatomical illustration on top. It is not a medical test and nothing medical should be concluded from it.',
+  credits: 'Credits', creditsText: 'Body and hand detection: Google MediaPipe (Apache 2.0 license). The anatomical illustrations are drawn by the app\'s own code.',
+  shareAppText: 'X·RAY CAM — a fun X-ray camera. Point it at a hand or a body and see what\'s inside!',
+  fileWarn: '⚠️ The app was opened from a local file. Camera, install and offline won\'t work this way — open it from its pages.dev address.',
+  update: 'A new version is ready', refresh: 'Reload', storageFail: 'Saving failed — the device may be out of space',
+  skipG: 'Skip', next: 'Next', done: 'Let\'s go!',
+  g1t: 'Welcome to X·RAY CAM', g1: 'A fun "X-ray" camera: point your phone at a hand or a body and see bones, muscles, organs and blood vessels — as if the camera could see through skin.',
+  g2t: 'What\'s in frame is what you see', g2: 'Point at a hand — see the hand and finger bones. An upper body — shoulders, ribs and arms. A whole person — the full skeleton. Good light helps.',
+  g3t: 'Turn up the power', g3: 'The ⚡ button cycles 4 layers: bones → muscles → organs → vessels. You can also tap a layer name directly.',
+  g4t: 'The scan window', g4: 'Inside the window you see the "X-ray", outside it the normal picture. Resize it with the slider and drag it up or down with your finger.',
+  g5t: 'Snap and share', g5: 'Tapping 📸 saves the picture to your gallery, stamped with your name. From there you can share, download and rename it.',
+  g6t: 'Privacy', g6: 'Everything runs on your phone: no image is sent anywhere. The first time, the detection engines (~25MB) are downloaded — after that it works offline too. This is a fun learning simulation, not a medical test.',
+}};
+const T = (k, vars) => { let s = (LANG[SET.lang] && LANG[SET.lang][k]) ?? LANG.en[k] ?? k; if (vars) for (const v in vars) s = s.replace('{' + v + '}', vars[v]); return s; };
+
+/* ---------------- storage shim + settings ---------------- */
+const mem = {};
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('xray_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return k in mem ? mem[k] : d; } },
+  set(k, v) { try { localStorage.setItem('xray_' + k, JSON.stringify(v)); return true; } catch (e) { mem[k] = v; toast(T('storageFail')); return false; } },
+  del(k) { try { localStorage.removeItem('xray_' + k); } catch (e) {} delete mem[k]; }
+};
+const DEF = {name: '', lang: 'he', theme: 'gold', mode: 'night', facing: 'environment', layer: 0, win: 62, perf: 'auto', hud: true, vibrate: true, seenGuide: false};
+let SET = Object.assign({}, DEF, store.get('settings', {}));
+const saveSet = () => store.set('settings', SET);
+
+/* ---------------- IndexedDB gallery (images as Blob) ---------------- */
+const DB = {
+  db: null, memRows: [],
+  open() { return this.db ? Promise.resolve(this.db) : new Promise((res, rej) => {
+    if (!('indexedDB' in window)) return rej(new Error('no idb'));
+    const r = indexedDB.open('xraycam', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('shots', {keyPath: 'id'});
+    r.onsuccess = () => { this.db = r.result; res(this.db); }; r.onerror = () => rej(r.error);
+  }); },
+  async tx(mode, fn) {
+    try { const db = await this.open(); return await new Promise((res, rej) => { const t = db.transaction('shots', mode), st = t.objectStore('shots'); const out = fn(st); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error); }); }
+    catch (e) { return null; }
+  },
+  async all() { const r = await this.tx('readonly', st => st.getAll()); return (r || this.memRows).slice().sort((a, b) => b.created - a.created); },
+  async put(row) { const r = await this.tx('readwrite', st => st.put(row)); if (r === null) { this.memRows = this.memRows.filter(x => x.id !== row.id); this.memRows.push(row); } },
+  async del(id) { await this.tx('readwrite', st => st.delete(id)); this.memRows = this.memRows.filter(x => x.id !== id); },
+  async clear() { await this.tx('readwrite', st => st.clear()); this.memRows = []; }
+};
+
+/* ---------------- UI helpers ---------------- */
+let toastTimer = 0;
+function toast(msg, actLabel, act, ms = 3200) {
+  const t = $('toast'); $('toastMsg').textContent = msg; const b = $('toastAct');
+  b.style.display = actLabel ? '' : 'none'; b.textContent = actLabel || ''; b.onclick = () => { t.classList.remove('on'); act && act(); };
+  t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), ms);
+}
+let lastFocus = null;
+function openModal(id) { lastFocus = document.activeElement; const m = $(id); m.classList.add('on'); const f = m.querySelector('input,button'); f && setTimeout(() => f.focus(), 50); }
+function closeModal(id, fromPop) { const m = id ? $(id) : document.querySelector('.modal.on'); if (!m) return false; m.classList.remove('on'); lastFocus && lastFocus.focus && lastFocus.focus(); return true; }
+document.querySelectorAll('.modal').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) closeModal(m.id); });
+  m.addEventListener('keydown', e => { // focus trap
+    if (e.key !== 'Tab') return; const f = [...m.querySelectorAll('button,input,a,select')].filter(x => x.offsetParent); if (!f.length) return;
+    const a = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a) { z.focus(); e.preventDefault(); } else if (!e.shiftKey && document.activeElement === z) { a.focus(); e.preventDefault(); }
+  });
+});
+addEventListener('keydown', e => { if (e.key === 'Escape') { if (!closeModal()) if (current !== 'home') go('home'); } });
+function confirmDlg(title, text, yes) { return new Promise(res => {
+  $('cTitle').textContent = title; $('cText').textContent = text; $('cYes').textContent = yes; openModal('mConfirm');
+  const done = v => { $('cYes').onclick = $('cNo').onclick = null; closeModal('mConfirm'); res(v); };
+  $('cYes').onclick = () => done(true); $('cNo').onclick = () => done(false);
+}); }
+
+/* ---------------- language / theme ---------------- */
+function applyLang() {
+  const d = document.documentElement; d.lang = SET.lang; d.dir = SET.lang === 'he' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-t]').forEach(el => { const v = T(el.dataset.t); if (/<br>/.test(v)) el.innerHTML = v; else el.textContent = v; });
+  document.querySelectorAll('[data-ta]').forEach(el => el.setAttribute('aria-label', T(el.dataset.ta)));
+  document.querySelectorAll('.ver').forEach(el => el.textContent = VERSION);
+  $('aboutDetails').innerHTML = T('detailsHtml', {v: VERSION});
+  if (typeof setScene === 'function' && demo) setScene(demoScene);
+  updatePowerLabel(); syncSegs();
+}
+function applyTheme() {
+  const d = document.documentElement; d.dataset.theme = SET.theme; d.dataset.mode = SET.mode;
+  $('modeBtn').textContent = SET.mode === 'night' ? '☀️' : '🌙';
+  document.querySelector('meta[name=theme-color]').content = SET.mode === 'night' ? '#0b0b0d' : '#f5f2ea';
+  document.querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s.dataset.th === SET.theme)); syncSegs();
+}
+const THEMES = ['gold', 'xray', 'emerald', 'violet', 'ruby'];
+for (const id of ['swatches', 'swatches2']) THEMES.forEach(t => { const b = document.createElement('button'); b.className = 'sw'; b.dataset.th = t; b.setAttribute('aria-label', t);
+  b.onclick = () => { SET.theme = t; saveSet(); applyTheme(); }; $(id).appendChild(b); });
+function bindSeg(id, key, cast = x => x, after) {
+  $(id).querySelectorAll('button').forEach(b => b.addEventListener('click', () => { SET[key] = cast(b.dataset.v); saveSet(); syncSegs(); after && after(); }));
+}
+function syncSegs() {
+  const map = {segLang: 'lang', segMode: 'mode', segMode2: 'mode', segFacing: 'facing', segLayer: 'layer', segPerf: 'perf'};
+  for (const id in map) $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', String(SET[map[id]]) === b.dataset.v));
+}
+bindSeg('segLang', 'lang', x => x, applyLang); bindSeg('segMode', 'mode', x => x, applyTheme); bindSeg('segMode2', 'mode', x => x, applyTheme);
+bindSeg('segFacing', 'facing'); bindSeg('segLayer', 'layer', Number); bindSeg('segPerf', 'perf');
+$('modeBtn').onclick = () => { SET.mode = SET.mode === 'night' ? 'day' : 'night'; saveSet(); applyTheme(); };
+$('themeBtn').onclick = () => openModal('mTheme');
+
+/* ---------------- navigation ---------------- */
+let current = 'home';
+function go(name, push = true) {
+  if (current === 'cam' && name !== 'cam') stopCam();
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + name));
+  current = name;
+  if (name === 'gallery') renderGallery();
+  if (name === 'settings') fillSettings();
+  if (name === 'home') refreshCount();
+  if (push && name !== 'home') history.pushState({s: name}, '');
+  const sc = $('s-' + name); sc && sc.scrollTo && sc.scrollTo(0, 0);
+}
+addEventListener('popstate', () => { if (closeModal(null, true)) { if (current !== 'home') history.pushState({s: current}, ''); return; } if (current !== 'home') go('home', false); });
+document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+document.querySelectorAll('[data-open-guide]').forEach(b => b.addEventListener('click', () => openGuide()));
+$('aboutBtn').onclick = () => go('about'); $('setBtn').onclick = () => go('settings'); $('galBtn').onclick = () => go('gallery');
+$('guideBtn').onclick = () => openGuide();
+
+/* =====================================================================
+   CAMERA FLOW
+   ===================================================================== */
+function updatePowerLabel() { $('powerBtn').textContent = level === LEVELS.length - 1 ? T('powerBack') : T('power'); }
 function setLevel(l, fx = true) {
   level = (l + LEVELS.length) % LEVELS.length;
-  document.documentElement.style.setProperty('--lvl', LEVELS[level].color);
+  $('s-cam').style.setProperty('--lvl', LEVELS[level].color);
   document.querySelectorAll('.lv').forEach(b => b.classList.toggle('on', +b.dataset.l === level));
-  $('hLayer').textContent = LEVELS[level].tag;
-  $('powerBtn').textContent = level === LEVELS.length - 1 ? '⚡ חזרה לשלד' : '⚡ הגבר עוצמה';
-  if (fx) { const f = $('flash'); f.style.background = LEVELS[level].color; f.style.transition = 'none'; f.style.opacity = .35;
-    requestAnimationFrame(() => { f.style.transition = 'opacity .35s'; f.style.opacity = 0; }); if (navigator.vibrate) navigator.vibrate(25); }
+  $('hLayer').textContent = LEVELS[level].tag; updatePowerLabel();
+  if (fx && !matchMedia('(prefers-reduced-motion: reduce)').matches) { const f = $('flash'); f.style.background = LEVELS[level].color; f.style.transition = 'none'; f.style.opacity = .35;
+    requestAnimationFrame(() => { f.style.transition = 'opacity .35s'; f.style.opacity = 0; }); }
+  if (fx && SET.vibrate && navigator.vibrate) navigator.vibrate(25);
 }
 function showOv(id, on) { $(id).classList.toggle('on', on); }
-
+function camPrep(l) {
+  lm = null; hands = []; maskReady = false; maskFromSeg = false; lowFx = SET.perf === 'lite'; slowFrames = 0;
+  winFrac = SET.win / 100; $('winSize').value = SET.win; $('winVal').textContent = SET.win + '%';
+  $('hud').style.display = SET.hud ? '' : 'none';
+  setLevel(l ?? SET.layer, false); go('cam');
+}
 async function openCamera() {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: {ideal: facing}, width: {ideal: 640}, height: {ideal: 480}}});
   video.srcObject = stream; await video.play(); lastVT = -1;
 }
-
 async function startCam(l) {
-  demo = false; lm = null; hands = []; maskReady = false; maskFromSeg = false; lowFx = false; slowFrames = 0;
-  setLevel(l, false);
-  $('start').style.display = 'none'; $('cam').classList.add('on'); $('demoTag').classList.remove('on');
-  showOv('errOv', false);
-  $('loadTitle').textContent = 'מפעיל מצלמה…'; $('loadText').textContent = 'אשרו גישה למצלמה אם הדפדפן שואל.'; showOv('loadOv', true);
+  demo = false; facing = SET.facing; camPrep(l);
+  $('demoTag').classList.remove('on'); showOv('errOv', false);
+  $('loadTitle').textContent = T('loadCam'); $('loadText').textContent = T('loadCamT'); showOv('loadOv', true);
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('no api'), {name: 'NoApi'});
     await openCamera();
   } catch (e) { return camError(e); }
+  if (current !== 'cam') { stopCam(); return; }
   running = true; cancelAnimationFrame(raf); loop();
-  $('loadTitle').textContent = 'טוען מנוע זיהוי גוף…'; $('loadText').textContent = 'בפעם הראשונה זה לוקח כמה שניות (≈25MB). אחר כך זה נשמר בדפדפן.';
+  if (!landmarker && !handLandmarker) { $('loadTitle').textContent = T('loadModel'); $('loadText').textContent = T('loadModelT'); }
   try { await loadModel(); showOv('loadOv', false); }
-  catch (e) {
-    console.error(e); showOv('loadOv', false);
-    $('errTitle').textContent = 'מנוע הזיהוי לא נטען';
-    $('errText').textContent = 'צריך חיבור לאינטרנט בפעם הראשונה. בדקו את החיבור ונסו שוב, או עברו למצב דמו.';
-    showOv('errOv', true);
-  }
+  catch (e) { console.error(e); showOv('loadOv', false); $('errTitle').textContent = T('errModel'); $('errText').textContent = T('errModelT'); showOv('errOv', true); }
 }
 function camError(e) {
-  console.warn('camera error', e);
-  showOv('loadOv', false);
-  const n = e && e.name;
-  const inFrame = window.self !== window.top;
-  $('errTitle').textContent = 'אין גישה למצלמה';
-  $('errText').textContent =
-    n === 'NotAllowedError' ? (inFrame ? 'התצוגה הזו חוסמת מצלמה. פתחו את האפליקציה מהכתובת שלה (למשל מ-Cloudflare Pages) בכרום.' : 'הגישה נחסמה. לחצו על סמל המנעול ליד הכתובת ← הרשאות ← מצלמה ← אפשר, ורעננו.')
-    : n === 'NotFoundError' ? 'לא נמצאה מצלמה במכשיר.'
-    : n === 'NotReadableError' ? 'המצלמה תפוסה על ידי אפליקציה אחרת. סגרו אותה ונסו שוב.'
-    : !isSecureContext ? 'מצלמה עובדת רק בכתובת מאובטחת (https). העלו את הקובץ לאתר ופתחו משם.'
-    : 'הדפדפן לא מאפשר מצלמה כאן. נסו לפתוח בכרום, מהכתובת של האפליקציה.';
+  console.warn('camera error', e); showOv('loadOv', false);
+  const n = e && e.name, inFrame = window.self !== window.top;
+  $('errTitle').textContent = T('errCam');
+  $('errText').textContent = n === 'NotAllowedError' ? (inFrame ? T('errFrame') : T('errDenied')) : n === 'NotFoundError' ? T('errNoCam')
+    : n === 'NotReadableError' ? T('errBusy') : !isSecureContext ? T('errInsecure') : T('errOther');
   showOv('errOv', true);
 }
-const SCENES = {body: '🎭 דמו: גוף מלא', close: '🎭 דמו: קרוב (פלג עליון)', hand: '🎭 דמו: יד'};
-function setScene(sc) { demoScene = sc; lm = null; hands = []; $('demoTag').textContent = SCENES[sc] + '  ⇄'; }
-function startDemo(l = level, sc = demoScene) {
+const SCENES = {body: 'scBody', close: 'scClose', hand: 'scHand'};
+function setScene(sc) { demoScene = sc; lm = null; hands = []; $('demoTag').textContent = T(SCENES[sc]) + '  ⇄'; }
+function startDemo(l, sc = 'body') {
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  demo = true; lm = null; hands = []; lowFx = false; slowFrames = 0; setScene(sc);
-  setLevel(l, false);
-  $('start').style.display = 'none'; $('cam').classList.add('on'); $('demoTag').classList.add('on');
-  showOv('errOv', false); showOv('loadOv', false);
+  demo = true; camPrep(l); setScene(sc);
+  $('demoTag').classList.add('on'); showOv('errOv', false); showOv('loadOv', false);
   running = true; cancelAnimationFrame(raf); loop();
 }
-function goBack() {
+function stopCam() {
   running = false; cancelAnimationFrame(raf);
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
   video.srcObject = null; lm = null; hands = []; demo = false;
   showOv('loadOv', false); showOv('errOv', false);
-  $('cam').classList.remove('on'); $('start').style.display = 'flex';
 }
 async function flip() {
   if (demo) return;
   facing = facing === 'environment' ? 'user' : 'environment';
-  try { await openCamera(); lm = null; } catch (e) { camError(e); }
-}
-function snapshot() {
-  const f = $('flash'); f.style.background = '#fff'; f.style.transition = 'none'; f.style.opacity = .8;
-  requestAnimationFrame(() => { f.style.transition = 'opacity .4s'; f.style.opacity = 0; });
-  view.toBlob(async b => {
-    if (!b) return;
-    const name = `xray-${Date.now()}.png`, file = new File([b], name, {type: 'image/png'});
-    if (navigator.canShare && navigator.canShare({files: [file]})) { try { await navigator.share({files: [file], title: 'X·RAY CAM'}); return; } catch (e) { if (e.name === 'AbortError') return; } }
-    const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-  }, 'image/png');
+  try { await openCamera(); lm = null; hands = []; } catch (e) { camError(e); }
 }
 
+/* ---------------- snapshot → gallery ---------------- */
+function fmtDate(t) { return new Date(t).toLocaleString(SET.lang === 'he' ? 'he-IL' : 'en-GB', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}); }
+async function snapshot() {
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { const f = $('flash'); f.style.background = '#fff'; f.style.transition = 'none'; f.style.opacity = .8;
+    requestAnimationFrame(() => { f.style.transition = 'opacity .4s'; f.style.opacity = 0; }); }
+  const W = view.width, H = view.height, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'); x.drawImage(view, 0, 0);
+  // stamp: app · layer · user · date (user name on every share/export)
+  const now = Date.now(), bh = Math.round(H * .055), fs = Math.round(bh * .38);
+  x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, H - bh, W, bh);
+  x.fillStyle = '#ffffff'; x.font = `700 ${fs}px Heebo, sans-serif`; x.textBaseline = 'middle';
+  const parts = ['X·RAY CAM', T(LEVELS[level].name), SET.name.trim(), fmtDate(now)].filter(Boolean);
+  x.direction = document.dir; x.textAlign = 'start'; x.fillText(parts.join('  ·  '), document.dir === 'rtl' ? W - fs : fs, H - bh / 2);
+  x.textAlign = document.dir === 'rtl' ? 'left' : 'right'; x.fillStyle = '#d4af37'; x.font = `800 ${fs}px Orbitron, sans-serif`;
+  x.fillText('AppNest', document.dir === 'rtl' ? fs : W - fs, H - bh / 2);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+  if (!blob) return;
+  const row = {id: 's' + now.toString(36) + Math.random().toString(36).slice(2, 6), blob, caption: T('shotDefault') + ' · ' + T(LEVELS[level].name), created: now, layer: level, by: SET.name.trim()};
+  await DB.put(row); requestPersist();
+  toast(T('saved'), T('share').replace(/^\S+\s/, ''), () => shareShot(row));
+}
+async function shareShot(row) {
+  const name = (row.caption || 'xray').replace(/[\\/:*?"<>|]+/g, '_') + '.jpg';
+  const file = new File([row.blob], name, {type: 'image/jpeg'});
+  const text = T('shareText') + (SET.name.trim() ? ' · ' + T('by') + ' ' + SET.name.trim() : '');
+  if (navigator.canShare && navigator.canShare({files: [file]})) { try { await navigator.share({files: [file], title: 'X·RAY CAM', text}); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  downloadBlob(row.blob, name);
+}
+function downloadBlob(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+
+/* ---------------- gallery screen ---------------- */
+let urls = [], viewing = null;
+async function refreshCount() { const rows = await DB.all(); $('galCount').textContent = rows.length; return rows; }
+async function renderGallery() {
+  urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
+  const rows = await refreshCount(), g = $('galGrid'); g.innerHTML = '';
+  $('galEmpty').style.display = rows.length ? 'none' : '';
+  for (const r of rows) {
+    const u = URL.createObjectURL(r.blob); urls.push(u);
+    const d = document.createElement('div'); d.className = 'shot'; d.tabIndex = 0; d.setAttribute('role', 'button');
+    d.innerHTML = `<img alt="" loading="lazy"><div class="cap"></div><div class="meta"></div><button class="ed" aria-label="${T('edit')}">✏️</button>`;
+    d.querySelector('img').src = u; d.querySelector('.cap').textContent = r.caption; d.querySelector('.meta').textContent = fmtDate(r.created);
+    let lp = 0, longed = false;
+    d.addEventListener('pointerdown', () => { longed = false; lp = setTimeout(() => { longed = true; navigator.vibrate && SET.vibrate && navigator.vibrate(20); openEdit(r); }, 520); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => d.addEventListener(ev, () => clearTimeout(lp)));
+    d.addEventListener('contextmenu', e => e.preventDefault());
+    d.addEventListener('click', e => { if (longed) return; if (e.target.closest('.ed')) openEdit(r); else openViewer(r, u); });
+    d.addEventListener('keydown', e => { if (e.key === 'Enter') openViewer(r, u); });
+    g.appendChild(d);
+  }
+}
+function openViewer(r, u) {
+  viewing = r; $('vImg').src = u; $('vCap').textContent = r.caption;
+  $('vMeta').textContent = fmtDate(r.created) + (r.by ? ' · ' + r.by : ''); openModal('mView');
+}
+$('vShare').onclick = () => viewing && shareShot(viewing);
+$('vSave').onclick = () => viewing && downloadBlob(viewing.blob, (viewing.caption || 'xray') + '.jpg');
+$('vEdit').onclick = () => { const r = viewing; closeModal('mView'); setTimeout(() => openEdit(r), 60); };
+let editing = null;
+function openEdit(r) { editing = r; $('eCap').value = r.caption; openModal('mEdit'); }
+$('eSave').onclick = async () => { if (!editing) return; editing.caption = $('eCap').value.trim() || T('shotDefault'); await DB.put(editing); closeModal('mEdit'); renderGallery(); };
+$('eDel').onclick = async () => {
+  const r = editing; closeModal('mEdit');
+  await new Promise(res => setTimeout(res, 80));
+  if (await confirmDlg(T('delQ'), T('delT'), T('delYes'))) { await DB.del(r.id); renderGallery(); }
+};
+
+/* ---------------- settings screen ---------------- */
+function fillSettings() {
+  $('setName').value = SET.name; $('setHud').checked = SET.hud; $('setVib').checked = SET.vibrate; syncSegs(); applyTheme();
+  persistLine();
+}
+$('setName').addEventListener('input', e => { SET.name = e.target.value; saveSet(); });
+$('setHud').addEventListener('change', e => { SET.hud = e.target.checked; saveSet(); });
+$('setVib').addEventListener('change', e => { SET.vibrate = e.target.checked; saveSet(); });
+async function requestPersist() { try { if (navigator.storage && navigator.storage.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch (e) {} }
+async function persistLine() { let ok = false; try { ok = navigator.storage && await navigator.storage.persisted(); } catch (e) {} $('persistLine').textContent = ok ? T('persistOk') : T('persistNo'); }
+
+const blobToData = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+const dataToBlob = async d => (await fetch(d)).blob();
+$('expBtn').onclick = async () => {
+  const rows = await DB.all(), shots = [];
+  for (const r of rows) shots.push({id: r.id, caption: r.caption, created: r.created, layer: r.layer, by: r.by || '', image: await blobToData(r.blob)});
+  const {seenGuide, ...settings} = SET;
+  const out = {app: APP_ID, version: VERSION, exported: new Date().toISOString(), user: SET.name, count: shots.length, settings, shots};
+  downloadBlob(new Blob([JSON.stringify(out)], {type: 'application/json'}), `xraycam-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  toast(T('expDone') + ` · ${shots.length}`);
+};
+$('impBtn').onclick = () => $('impFile').click();
+$('impFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  let j; try { j = JSON.parse(await f.text()); } catch (err) { return toast(T('impBad')); }
+  if (!j || j.app !== APP_ID || !Array.isArray(j.shots)) return toast(T('impBad'));
+  if (!(await confirmDlg(T('impQ'), T('impT'), T('impYes')))) return;
+  await DB.clear();
+  for (const s of j.shots) { try { await DB.put({id: s.id, caption: s.caption, created: s.created, layer: s.layer, by: s.by, blob: await dataToBlob(s.image)}); } catch (err) {} }
+  SET = Object.assign({}, DEF, j.settings || {}, {seenGuide: true}); saveSet(); applyTheme(); applyLang(); fillSettings();
+  toast(T('impDone') + ` · ${j.shots.length}`);
+};
+$('wipeBtn').onclick = async () => {
+  if (!(await confirmDlg(T('wipeQ'), T('wipeT'), T('wipeYes')))) return;
+  await new Promise(r => setTimeout(r, 120));
+  if (!(await confirmDlg(T('wipeQ2'), T('wipeT2'), T('wipeYes2')))) return;
+  await DB.clear(); ['settings', 'errors'].forEach(k => store.del(k));
+  SET = Object.assign({}, DEF, {seenGuide: true, lang: SET.lang}); saveSet(); applyTheme(); applyLang(); fillSettings(); toast(T('wiped'));
+};
+
+/* ---------------- diagnostics ---------------- */
+$('diagBtn').onclick = async () => {
+  let est = '', pers = '?';
+  try { const e = await navigator.storage.estimate(); est = `${(e.usage / 1048576).toFixed(1)}MB / ${(e.quota / 1048576).toFixed(0)}MB`; pers = await navigator.storage.persisted(); } catch (e) {}
+  let gl = 'no'; try { gl = document.createElement('canvas').getContext('webgl2') ? 'webgl2' : (document.createElement('canvas').getContext('webgl') ? 'webgl1' : 'no'); } catch (e) {}
+  const errs = store.get('errors', []);
+  const lines = [
+    `X·RAY CAM v${VERSION} · ${new Date().toISOString()}`,
+    `URL: ${location.origin}${location.pathname}`, `UA: ${navigator.userAgent}`,
+    `Screen: ${screen.width}x${screen.height} @${devicePixelRatio} · viewport ${innerWidth}x${innerHeight}`,
+    `Secure: ${isSecureContext} · SW: ${navigator.serviceWorker && navigator.serviceWorker.controller ? 'active' : 'none'} · standalone: ${matchMedia('(display-mode: standalone)').matches}`,
+    `Storage: ${est} · persisted: ${pers} · IndexedDB: ${'indexedDB' in window}`,
+    `Camera API: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)} · GPU: ${gl}`,
+    `Models: pose=${landmarker ? 'loaded' : 'no'} hand=${handLandmarker ? 'loaded' : 'no'} · lowFx=${lowFx} · perf=${SET.perf}`,
+    `Gallery: ${$('galCount').textContent} · lang=${SET.lang} theme=${SET.theme}/${SET.mode}`,
+    `Errors (${errs.length}):`, ...errs.map(e => `  [${e.t}] ${e.m} (${e.f}:${e.l})`)
+  ];
+  $('diagText').textContent = lines.join('\n'); openModal('mDiag');
+};
+$('diagCopy').onclick = async () => { try { await navigator.clipboard.writeText($('diagText').textContent); toast(T('copied')); } catch (e) { toast('✗'); } };
+
+/* ---------------- about: share app ---------------- */
+$('shareAppBtn').onclick = async () => {
+  const data = {title: 'X·RAY CAM', text: T('shareAppText'), url: location.href.split('#')[0].split('?')[0]};
+  try { if (navigator.share) return await navigator.share(data); } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(data.url); toast(T('copied')); } catch (e) {}
+};
+
+/* ---------------- onboarding guide ---------------- */
+const GSTEPS = [['👋', 'g1t', 'g1'], ['✋', 'g2t', 'g2'], ['⚡', 'g3t', 'g3'], ['🔲', 'g4t', 'g4'], ['📸', 'g5t', 'g5'], ['🔒', 'g6t', 'g6']];
+let gi = 0;
+function renderGuide() {
+  const [ic, t, x] = GSTEPS[gi]; $('gIc').textContent = ic; $('gTitle').textContent = T(t); $('gText').textContent = T(x);
+  $('gDots').innerHTML = GSTEPS.map((_, i) => `<i class="${i === gi ? 'on' : ''}"></i>`).join('');
+  $('gNext').textContent = gi === GSTEPS.length - 1 ? T('done') : T('next');
+}
+function openGuide() { gi = 0; renderGuide(); openModal('mGuide'); }
+function endGuide() { SET.seenGuide = true; saveSet(); closeModal('mGuide'); }
+$('gNext').onclick = () => { if (gi < GSTEPS.length - 1) { gi++; renderGuide(); } else endGuide(); };
+$('gSkip').onclick = endGuide;
+
+/* ---------------- camera wiring ---------------- */
+$('scanBtn').onclick = () => startCam();
 document.querySelectorAll('.tile').forEach(b => b.addEventListener('click', () => startCam(+b.dataset.l)));
-$('demoBtn').addEventListener('click', () => startDemo(0, 'body'));
-$('demoHandBtn').addEventListener('click', () => startDemo(0, 'hand'));
-$('demoTag').addEventListener('click', () => { const k = Object.keys(SCENES); setScene(k[(k.indexOf(demoScene) + 1) % k.length]); });
-$('errDemo').addEventListener('click', () => startDemo(level));
-$('errBack').addEventListener('click', goBack);
-$('backBtn').addEventListener('click', goBack);
-$('flipBtn').addEventListener('click', flip);
-$('shotBtn').addEventListener('click', snapshot);
-$('powerBtn').addEventListener('click', () => setLevel(level + 1));
+$('demoHomeBtn').onclick = () => startDemo(undefined, 'body');
+$('errDemo').onclick = () => startDemo(level, 'body');
+$('errBack').onclick = () => go('home');
+$('backBtn').onclick = () => { if (history.state && history.state.s === 'cam') history.back(); else go('home'); };
+$('flipBtn').onclick = flip;
+$('shotBtn').onclick = snapshot;
+$('powerBtn').onclick = () => setLevel(level + 1);
 document.querySelectorAll('.lv').forEach(b => b.addEventListener('click', () => setLevel(+b.dataset.l)));
-$('winSize').addEventListener('input', e => { winFrac = e.target.value / 100; $('winVal').textContent = e.target.value + '%'; });
-// drag the scan window up/down
+$('demoTag').onclick = () => { const k = Object.keys(SCENES); setScene(k[(k.indexOf(demoScene) + 1) % k.length]); };
+$('winSize').addEventListener('input', e => { winFrac = e.target.value / 100; $('winVal').textContent = e.target.value + '%'; SET.win = +e.target.value; saveSet(); });
 let dragY = null;
 view.addEventListener('pointerdown', e => { dragY = e.clientY; view.setPointerCapture(e.pointerId); });
 view.addEventListener('pointermove', e => { if (dragY === null) return; winCY = clamp(winCY + (e.clientY - dragY) / view.clientHeight, .1, .9); dragY = e.clientY; });
 view.addEventListener('pointerup', () => dragY = null);
 view.addEventListener('pointercancel', () => dragY = null);
-document.addEventListener('visibilitychange', () => { if (document.hidden && running && !demo) { /* keep stream; browser pauses rAF */ } });
-{ const q = new URLSearchParams(location.search); if (q.has('demo')) startDemo(+(q.get('l') || 0), q.get('demo') || 'body'); }
-window.__xray = {setLevel, startDemo, setScene};
+let paused = false;
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden && current === 'cam' && !demo && running) { paused = true; running = false; cancelAnimationFrame(raf); if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
+  else if (!document.hidden && paused && current === 'cam') { paused = false; try { await openCamera(); running = true; loop(); } catch (e) { camError(e); } }
+});
+
+/* ---------------- service worker ---------------- */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    if (!reg) return;
+    reg.addEventListener('updatefound', () => { const w = reg.installing; w && w.addEventListener('statechange', () => {
+      if (w.state === 'installed' && navigator.serviceWorker.controller) toast(T('update'), T('refresh'), () => location.reload(), 15000); }); });
+  }).catch(e => console.warn('SW', e));
+}
+
+/* ---------------- boot ---------------- */
+if (location.protocol === 'file:') $('fileBanner').style.display = '';
+applyTheme(); applyLang(); refreshCount();
+{ const q = new URLSearchParams(location.search);
+  if (q.has('demo')) { SET.seenGuide = true; startDemo(+(q.get('l') || 0), q.get('demo') || 'body'); }
+  else if (!SET.seenGuide) setTimeout(openGuide, 400); }
+window.__xray = {setLevel, startDemo, setScene, go, T};
+
 </script>
 </body>
 </html>
