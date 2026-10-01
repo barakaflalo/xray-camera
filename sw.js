@@ -6,7 +6,7 @@
    - skipWaiting so a fixing SW takes over immediately
    - vendor cache (MediaPipe engine + models + fonts) cache-first, so scanning works offline after the first load
    BUMP VERSION ON EVERY RELEASE. */
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const APP_CACHE = 'xraycam-app-' + VERSION;
 const VENDOR_CACHE = 'xraycam-vendor-v1';   // pinned library/model URLs → stable across app versions
 const SHELL = ['./', './index.html', './manifest.json', './privacy_policy.html', './icon-192.png', './icon-512.png'];
@@ -54,16 +54,27 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // 1) navigation: network-first (4s) → cache → offline page
+  // 1) navigation: network-first (4s) → cache → offline page.
+  //    Only the app page itself is stored as the offline copy of the app —
+  //    other pages (privacy policy) are cached under their own address.
   if (req.mode === 'navigate') {
+    const scopePath = new URL(self.registration.scope).pathname;
+    const isApp = url.origin === self.location.origin &&
+      (url.pathname === scopePath || url.pathname === scopePath + 'index' || url.pathname === scopePath + 'index.html');
     e.respondWith((async () => {
+      const c = await caches.open(APP_CACHE);
       try {
         const r = await Promise.race([fetch(req, {cache: 'no-cache'}), timeout(4000)]);
-        if (r && r.ok) { const c = await caches.open(APP_CACHE); c.put('./index.html', (await clean(r)).clone()).catch(() => {}); }
+        if (r && r.ok) {
+          const copy = (await clean(r)).clone();
+          if (isApp) c.put('./index.html', copy).catch(() => {});
+          else if (url.origin === self.location.origin) c.put(url.pathname, copy).catch(() => {});
+        }
         return r;
       } catch (err) {
-        const c = await caches.open(APP_CACHE);
-        const hit = (await c.match('./index.html')) || (await c.match('./')) || (await caches.match(req));
+        const hit = isApp
+          ? (await c.match('./index.html')) || (await c.match('./'))
+          : (await c.match(url.pathname)) || (await c.match('./privacy_policy.html'));
         return hit || new Response(OFFLINE_HTML, {headers: {'Content-Type': 'text/html; charset=utf-8'}});
       }
     })());

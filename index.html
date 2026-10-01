@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl" data-theme="gold" data-mode="night">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#0b0b0d">
 <meta name="description" content="X·RAY CAM — מצלמת רנטגן משעשעת וחינוכית: כוונו אל יד או גוף וראו שלד, שרירים, איברים וכלי דם. הכול על המכשיר. AppNest.">
@@ -99,6 +99,7 @@ a.btn{text-decoration:none}
 .hero svg{width:84px;filter:drop-shadow(0 0 8px #7fe7ff)}
 .hero::after{content:'';position:absolute;left:10%;right:10%;height:2px;background:linear-gradient(90deg,transparent,#7fe7ff,transparent);animation:heroScan 2.6s ease-in-out infinite}
 @keyframes heroScan{0%,100%{top:18%}50%{top:82%}}
+.simnote{text-align:center;font-size:12.5px;color:var(--muted);margin-top:-6px}
 .tag{text-align:center;color:var(--muted);font-size:14px;line-height:1.7}
 .cta{min-height:64px;border-radius:18px;border:none;background:var(--accent);color:var(--ink);font-size:20px;font-weight:800;box-shadow:0 6px 24px color-mix(in srgb,var(--accent) 35%,transparent)}
 .cta:active{transform:scale(.98)}
@@ -162,7 +163,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .demoTag.on{display:block}
 .bottom{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:14px 16px calc(env(safe-area-inset-bottom) + 14px);background:linear-gradient(0deg,rgba(0,6,14,.96) 55%,transparent)}
 .levels{display:flex;gap:6px;margin-bottom:12px}
-.lv{flex:1;border:1px solid rgba(127,231,255,.28);background:rgba(2,14,26,.6);color:rgba(207,245,255,.6);border-radius:10px;min-height:38px;font-size:13px;font-weight:700;transition:.25s}
+.lv{flex:1;border:1px solid rgba(127,231,255,.28);background:rgba(2,14,26,.6);color:rgba(207,245,255,.6);border-radius:10px;min-height:44px;font-size:13px;font-weight:700;transition:.25s}
 .lv.on{color:#01060d;background:var(--lvl);border-color:var(--lvl);box-shadow:0 0 16px var(--lvl)}
 .power{width:100%;height:56px;border-radius:14px;border:1.5px solid var(--lvl);color:#eafcff;font-size:17px;font-weight:800;
   background:linear-gradient(135deg,color-mix(in srgb,var(--lvl) 30%,transparent),rgba(2,20,36,.7));box-shadow:0 0 18px color-mix(in srgb,var(--lvl) 40%,transparent)}
@@ -204,6 +205,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
   </div>
   <p class="tag" data-t="tagline">כוונו את המצלמה אל יד, פלג גוף או בן אדם שלם — וראו מה יש בפנים.</p>
   <button class="cta" id="scanBtn" data-t="startScan">📷 התחל סריקה</button>
+  <p class="simnote" data-t="simNote"></p>
   <div class="tiles" role="group" data-ta="startAt" aria-label="התחל בשכבה">
     <button class="tile" data-l="0"><span class="ic">🦴</span><span data-t="lvBone">שלד</span></button>
     <button class="tile" data-l="1"><span class="ic">💪</span><span data-t="lvMuscle">שרירים</span></button>
@@ -249,6 +251,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
   <div class="ov" id="loadOv"><h3 id="loadTitle"></h3><div class="lbar"><i></i></div><p id="loadText"></p></div>
   <div class="ov" id="errOv">
     <div style="font-size:46px">📷</div><h3 id="errTitle"></h3><p id="errText"></p>
+    <button class="btn" id="errRetry" data-t="retry" style="display:none">↻ נסה שוב</button>
     <button class="btn" id="errDemo" data-t="toDemo">🎭 עבור למצב דמו</button>
     <button class="btn" id="errBack" data-t="backHome">→ חזרה לדף הבית</button>
   </div>
@@ -259,6 +262,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
  <div class="wrap">
   <div class="bar"><button class="back" data-go="home" data-t="home">→ בית</button><h2 data-t="gallery">הגלריה שלי</h2></div>
   <div class="gal" id="galGrid"></div>
+  <div class="banner" id="galErr" style="display:none" data-t="galErr"></div>
   <div class="empty" id="galEmpty"><div class="ic">🖼️</div><div data-t="galEmpty"></div></div>
  </div>
 </section>
@@ -269,6 +273,7 @@ video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
   <div class="bar"><button class="back" data-go="home" data-t="home">→ בית</button><h2 data-t="settings">הגדרות</h2></div>
   <div class="card"><h3 data-t="profile">פרופיל</h3>
     <div class="field"><label for="setName" data-t="userName">שם משתמש</label><input class="in" id="setName" maxlength="40" autocomplete="nickname"><div class="muted" data-t="userNameHint"></div></div>
+    <label class="switch"><span data-t="stampName">להוסיף את השם שלי לצילומים</span><input type="checkbox" id="setStamp"></label>
   </div>
   <div class="card"><h3 data-t="display">תצוגה</h3>
     <div class="field"><label data-t="language">שפה</label><div class="seg" id="segLang"><button data-v="he">עברית</button><button data-v="en">English</button></div></div>
@@ -389,6 +394,7 @@ let level = 0, running = false, demo = false, facing = 'environment';
 let stream = null, landmarker = null, raf = 0, lastVT = -1, lastTs = 0;
 let winFrac = 0.62, winCY = 0.47;
 let lm = null, lmSeen = 0, maskReady = false, maskFromSeg = false;
+const RMQ = matchMedia('(prefers-reduced-motion: reduce)');
 let poseStreak = 0, poseRejected = false, bigHandAt = 0, lastF = null;
 let FW = 1, FH = 1, hands = [], handLandmarker = null, demoScene = 'body', frameIdx = 0, hintText = '';
 let fpsAcc = 0, fpsN = 0, fpsT = performance.now(), lowFx = false, slowFrames = 0;
@@ -1231,12 +1237,14 @@ function drawView(src, W, Hh, time, F) {
   // scan window
   const mx = DW * .04, wh = DH * winFrac, wy = clamp(DH * winCY - wh / 2, 0, DH - wh), ww = DW - mx * 2, r = Math.min(26 * dpr, wh * .08);
   vctx.save(); roundRect(vctx, mx, wy, ww, wh, r); vctx.clip(); put(xr);
-  // scan sweep
+  // scan sweep (skipped when the user asked for reduced motion)
+  if (!RMQ.matches) {
   const sy = wy + ((time * .35) % 1) * wh;
   const g = vctx.createLinearGradient(0, sy - 40 * dpr, 0, sy);
   g.addColorStop(0, 'rgba(127,231,255,0)'); g.addColorStop(1, LEVELS[level].color + '55');
   vctx.fillStyle = g; vctx.fillRect(mx, sy - 40 * dpr, ww, 40 * dpr);
   vctx.fillStyle = LEVELS[level].color; vctx.globalAlpha = .8; vctx.fillRect(mx, sy, ww, 1.5 * dpr);
+  }
   vctx.restore();
   // frame + brackets
   vctx.save();
@@ -1248,6 +1256,11 @@ function drawView(src, W, Hh, time, F) {
   }
   vctx.shadowBlur = 0; vctx.font = `700 ${10 * dpr}px Orbitron, sans-serif`; vctx.fillStyle = LEVELS[level].color;
   vctx.textAlign = 'left'; vctx.fillText('X-RAY · ' + LEVELS[level].tag, mx + 12 * dpr, wy + 20 * dpr);
+  vctx.font = `600 ${10.5 * dpr}px Heebo, sans-serif`; vctx.globalAlpha = .75; vctx.direction = document.dir;
+  { const tx = T('simLabel'), tw = vctx.measureText(tx).width, px = mx + ww / 2, py = wy + wh - 16 * dpr;
+    vctx.globalAlpha = 1; vctx.fillStyle = 'rgba(0,8,18,.7)'; roundRect(vctx, px - tw / 2 - 10 * dpr, py - 11 * dpr, tw + 20 * dpr, 20 * dpr, 10 * dpr); vctx.fill();
+    vctx.fillStyle = 'rgba(223,249,255,.9)'; vctx.textAlign = 'center'; vctx.textBaseline = 'middle'; vctx.fillText(tx, px, py); vctx.textBaseline = 'alphabetic'; }
+  vctx.globalAlpha = 1; vctx.direction = 'ltr';
   const msg = (l1, l2) => {
     vctx.textAlign = 'center'; vctx.font = `700 ${14 * dpr}px Heebo, sans-serif`; vctx.direction = document.dir;
     const w = Math.max(vctx.measureText(l1).width, l2 ? vctx.measureText(l2).width : 0) + 32 * dpr, cy = wy + wh / 2;
@@ -1511,12 +1524,18 @@ function loop() {
 /* =====================================================================
    APPNEST SHELL — i18n · settings · gallery (IndexedDB) · navigation
    ===================================================================== */
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const APP_ID = 'xraycam';
 
 /* ---------------- i18n (he / en) ---------------- */
 const LANG = {
 he: {
+  simLabel: '🔬 הדמיה לפי תנוחת הגוף · לא רנטגן אמיתי', simShort: 'הדמיה', simNote: '🔬 הדמיה אנטומית לפי תנוחת הגוף — לא צילום רנטגן אמיתי',
+  saveErr: 'השמירה נכשלה — הצילום לא נשמר בגלריה', saveFullErr: 'אין מספיק מקום במכשיר — הצילום לא נשמר',
+  impTooBig: 'הקובץ גדול מדי לשחזור (מעל 400MB)', impNoImages: 'לא נמצאו בגיבוי תמונות תקינות — הגלריה הנוכחית לא שונתה',
+  impT2: 'הגלריה וההגדרות הנוכחיות יוחלפו ב-{n} צילומים מהגיבוי.', impBadN: '{b} צילומים פגומים ידולגו.', impKept: 'הגלריה הקודמת נשארה כמו שהייתה', impSkipped: 'דולגו {b} פגומים',
+  noBodyEngine: 'מנוע זיהוי הגוף לא נטען — כרגע מזוהות ידיים בלבד', noHandEngine: 'מנוע זיהוי הידיים לא נטען — כרגע מזוהה גוף בלבד', retry: '↻ נסה שוב',
+  stampName: 'להוסיף את השם שלי לצילומים', storageUse: '· בשימוש: {u}MB · פנוי: כ-{f}GB', galErr: 'לא ניתן לקרוא את הגלריה בדפדפן הזה (ייתכן שמצב גלישה בסתר חוסם שמירה).',
   skip: 'דלג לתוכן', subtitle: 'מצלמת רנטגן · AppNest', theme: 'ערכת צבע', mode: 'יום/לילה', about: 'אודות',
   tagline: 'כוונו את המצלמה אל יד, פלג גוף או בן אדם שלם — וראו מה יש בפנים.',
   startScan: '📷 התחל סריקה', startAt: 'התחל בשכבה', gallery: 'הגלריה שלי', demo: 'מצב דמו', settings: 'הגדרות', guide: '📖 מדריך', guideL: 'מדריך',
@@ -1546,9 +1565,9 @@ he: {
   perfHint: 'אוטומטי עובר לבד למצב חסכוני כשהטלפון מתקשה. חסכוני מוותר על אפקט הזוהר ומריץ את הזיהוי לסירוגין.',
   showHud: 'הצג נתוני סריקה (HUD)', vibrate: 'רטט במעבר שכבה',
   data: 'נתונים וגיבוי', dataHint: 'הצילומים וההגדרות שמורים רק בטלפון הזה. גיבוי הוא קובץ אחד שאפשר לשמור ולשחזר ממנו בכל מכשיר.',
-  exportB: '⬇️ ייצוא גיבוי', importB: '⬆️ שחזור מגיבוי', wipe: '🗑️ מחיקת הכול',
+  exportB: '⬇️ ייצוא גיבוי', importB: '⬆️ שחזור מגיבוי', wipe: '🗑️ מחיקת הצילומים וההגדרות',
   persistOk: '✓ הדפדפן התבקש לא למחוק את הנתונים אוטומטית.', persistNo: 'הדפדפן עלול לפנות את הנתונים כשאין מקום — מומלץ לגבות מדי פעם.',
-  expDone: 'קובץ הגיבוי נוצר', impQ: 'לשחזר מהגיבוי?', impT: 'השחזור מחליף את כל הצילומים וההגדרות הנוכחיים.', impYes: 'שחזר',
+  expDone: 'קובץ הגיבוי נוצר', impQ: 'לשחזר מהגיבוי?', impYes: 'שחזר',
   impDone: 'השחזור הושלם', impBad: 'הקובץ הזה אינו גיבוי של X·RAY CAM',
   wipeQ: 'למחוק את הכול?', wipeT: 'כל הצילומים וההגדרות יימחקו מהמכשיר.', wipeYes: 'כן, המשך',
   wipeQ2: 'בטוח לגמרי?', wipeT2: 'זה הצעד האחרון. בלי קובץ גיבוי אין דרך לשחזר.', wipeYes2: 'מחק הכול', wiped: 'הכול נמחק',
@@ -1570,6 +1589,12 @@ he: {
   g6t: 'פרטיות', g6: 'הכול רץ על הטלפון: שום תמונה לא נשלחת לשום מקום. בפעם הראשונה נטענים מנועי הזיהוי (כ-25MB) — אחר כך זה עובד גם בלי אינטרנט. זו הדמיה לצורכי כיף ולמידה, לא בדיקה רפואית.',
 },
 en: {
+  simLabel: '🔬 Simulation from body pose · not a real X-ray', simShort: 'simulation', simNote: '🔬 An anatomical simulation based on body pose — not a real X-ray',
+  saveErr: 'Saving failed — the snapshot was not saved', saveFullErr: 'Not enough space on the device — the snapshot was not saved',
+  impTooBig: 'The file is too large to restore (over 400MB)', impNoImages: 'No valid images found in the backup — your gallery was not changed',
+  impT2: 'Your current gallery and settings will be replaced with {n} snapshots from the backup.', impBadN: '{b} damaged snapshots will be skipped.', impKept: 'your previous gallery is unchanged', impSkipped: '{b} damaged skipped',
+  noBodyEngine: 'The body engine didn\'t load — only hands are detected for now', noHandEngine: 'The hand engine didn\'t load — only the body is detected for now', retry: '↻ Try again',
+  stampName: 'Add my name to snapshots', storageUse: '· used: {u}MB · free: ~{f}GB', galErr: 'The gallery can\'t be read in this browser (private browsing may block storage).',
   skip: 'Skip to content', subtitle: 'X-ray camera · AppNest', theme: 'Color theme', mode: 'Day/Night', about: 'About',
   tagline: 'Point the camera at a hand, an upper body or a whole person — and see what\'s inside.',
   startScan: '📷 Start scanning', startAt: 'Start at layer', gallery: 'My gallery', demo: 'Demo mode', settings: 'Settings', guide: '📖 Guide', guideL: 'Guide',
@@ -1599,9 +1624,9 @@ en: {
   perfHint: 'Auto switches to Lite by itself when the phone struggles. Lite skips the glow effect and alternates detection.',
   showHud: 'Show scan data (HUD)', vibrate: 'Vibrate on layer change',
   data: 'Data & backup', dataHint: 'Snapshots and settings live only on this phone. A backup is a single file you can restore on any device.',
-  exportB: '⬇️ Export backup', importB: '⬆️ Restore backup', wipe: '🗑️ Delete everything',
+  exportB: '⬇️ Export backup', importB: '⬆️ Restore backup', wipe: '🗑️ Delete snapshots & settings',
   persistOk: '✓ The browser was asked not to clear this data automatically.', persistNo: 'The browser may clear data when space runs low — back up from time to time.',
-  expDone: 'Backup file created', impQ: 'Restore from backup?', impT: 'Restoring replaces all current snapshots and settings.', impYes: 'Restore',
+  expDone: 'Backup file created', impQ: 'Restore from backup?', impYes: 'Restore',
   impDone: 'Restore complete', impBad: 'This file is not an X·RAY CAM backup',
   wipeQ: 'Delete everything?', wipeT: 'All snapshots and settings will be removed from this device.', wipeYes: 'Yes, continue',
   wipeQ2: 'Absolutely sure?', wipeT2: 'This is the last step. Without a backup file there\'s no way back.', wipeYes2: 'Delete all', wiped: 'Everything was deleted',
@@ -1631,28 +1656,34 @@ const store = {
   set(k, v) { try { localStorage.setItem('xray_' + k, JSON.stringify(v)); return true; } catch (e) { mem[k] = v; toast(T('storageFail')); return false; } },
   del(k) { try { localStorage.removeItem('xray_' + k); } catch (e) {} delete mem[k]; }
 };
-const DEF = {name: '', lang: 'he', theme: 'gold', mode: 'night', facing: 'environment', layer: 0, win: 62, perf: 'auto', hud: true, vibrate: true, seenGuide: false};
+const DEF = {name: '', stampName: true, lang: 'he', theme: 'gold', mode: 'night', facing: 'environment', layer: 0, win: 62, perf: 'auto', hud: true, vibrate: true, seenGuide: false};
 let SET = Object.assign({}, DEF, store.get('settings', {}));
 const saveSet = () => store.set('settings', SET);
 
-/* ---------------- IndexedDB gallery (images as Blob) ---------------- */
+/* ---------------- IndexedDB gallery (images as Blob) ----------------
+   Every write either really lands on disk or throws — no silent memory fallback. */
 const DB = {
-  db: null, memRows: [],
+  db: null,
   open() { return this.db ? Promise.resolve(this.db) : new Promise((res, rej) => {
-    if (!('indexedDB' in window)) return rej(new Error('no idb'));
+    if (!('indexedDB' in window)) return rej(Object.assign(new Error('IndexedDB unavailable'), {name: 'NoIDB'}));
     const r = indexedDB.open('xraycam', 1);
     r.onupgradeneeded = () => r.result.createObjectStore('shots', {keyPath: 'id'});
     r.onsuccess = () => { this.db = r.result; res(this.db); }; r.onerror = () => rej(r.error);
   }); },
-  async tx(mode, fn) {
-    try { const db = await this.open(); return await new Promise((res, rej) => { const t = db.transaction('shots', mode), st = t.objectStore('shots'); const out = fn(st); t.oncomplete = () => res(out && out.result !== undefined ? out.result : out); t.onerror = () => rej(t.error); }); }
-    catch (e) { return null; }
-  },
-  async all() { const r = await this.tx('readonly', st => st.getAll()); return (r || this.memRows).slice().sort((a, b) => b.created - a.created); },
-  async put(row) { const r = await this.tx('readwrite', st => st.put(row)); if (r === null) { this.memRows = this.memRows.filter(x => x.id !== row.id); this.memRows.push(row); } },
-  async del(id) { await this.tx('readwrite', st => st.delete(id)); this.memRows = this.memRows.filter(x => x.id !== id); },
-  async clear() { await this.tx('readwrite', st => st.clear()); this.memRows = []; }
+  req(mode, fn) { return this.open().then(db => new Promise((res, rej) => {
+    let t; try { t = db.transaction('shots', mode); } catch (err) { return rej(err); }
+    let out; try { out = fn(t.objectStore('shots')); } catch (err) { try { t.abort(); } catch (x) {} return rej(err); }
+    t.oncomplete = () => res(out && typeof out === 'object' && 'readyState' in out ? out.result : out);
+    t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('aborted'));
+  })); },
+  async all() { try { return (await this.req('readonly', st => st.getAll())).sort((a, b) => b.created - a.created); } catch (err) { console.warn('gallery read', err); return null; } },
+  put(row) { return this.req('readwrite', st => { st.put(row); }); },
+  del(id) { return this.req('readwrite', st => { st.delete(id); }); },
+  clear() { return this.req('readwrite', st => { st.clear(); }); },
+  // atomic: either the whole new set is written, or nothing changes
+  replaceAll(rows) { return this.req('readwrite', st => { st.clear(); for (const r of rows) st.put(r); }); }
 };
+const saveErrMsg = err => err && err.name === 'QuotaExceededError' ? T('saveFullErr') : T('saveErr');
 
 /* ---------------- UI helpers ---------------- */
 let toastTimer = 0;
@@ -1663,7 +1694,10 @@ function toast(msg, actLabel, act, ms = 3200) {
 }
 let lastFocus = null;
 function openModal(id) { lastFocus = document.activeElement; const m = $(id); m.classList.add('on'); const f = m.querySelector('input,button'); f && setTimeout(() => f.focus(), 50); }
-function closeModal(id, fromPop) { const m = id ? $(id) : document.querySelector('.modal.on'); if (!m) return false; m.classList.remove('on'); lastFocus && lastFocus.focus && lastFocus.focus(); return true; }
+let confirmResolve = null;
+function closeModal(id, fromPop) { const m = id ? $(id) : document.querySelector('.modal.on'); if (!m || !m.classList.contains('on')) return false; m.classList.remove('on');
+  if (m.id === 'mConfirm' && confirmResolve) { const r = confirmResolve; confirmResolve = null; r(false); }
+  lastFocus && lastFocus.focus && lastFocus.focus(); return true; }
 document.querySelectorAll('.modal').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-close]')) closeModal(m.id); });
   m.addEventListener('keydown', e => { // focus trap
@@ -1673,8 +1707,10 @@ document.querySelectorAll('.modal').forEach(m => {
 });
 addEventListener('keydown', e => { if (e.key === 'Escape') { if (!closeModal()) if (current !== 'home') go('home'); } });
 function confirmDlg(title, text, yes) { return new Promise(res => {
-  $('cTitle').textContent = title; $('cText').textContent = text; $('cYes').textContent = yes; openModal('mConfirm');
-  const done = v => { $('cYes').onclick = $('cNo').onclick = null; closeModal('mConfirm'); res(v); };
+  if (confirmResolve) { const old = confirmResolve; confirmResolve = null; old(false); }
+  $('cTitle').textContent = title; $('cText').textContent = text; $('cYes').textContent = yes;
+  confirmResolve = res; openModal('mConfirm');
+  const done = v => { const r = confirmResolve; confirmResolve = null; closeModal('mConfirm'); r && r(v); };
   $('cYes').onclick = () => done(true); $('cNo').onclick = () => done(false);
 }); }
 
@@ -1713,6 +1749,7 @@ $('themeBtn').onclick = () => openModal('mTheme');
 let current = 'home';
 function go(name, push = true) {
   if (current === 'cam' && name !== 'cam') stopCam();
+  document.querySelector('meta[name=viewport]').content = 'width=device-width, initial-scale=1, viewport-fit=cover' + (name === 'cam' ? ', maximum-scale=1, user-scalable=no' : '');
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + name));
   current = name;
   if (name === 'gallery') renderGallery();
@@ -1752,8 +1789,14 @@ async function openCamera() {
   stream = await navigator.mediaDevices.getUserMedia({audio: false, video: {facingMode: {ideal: facing}, width: {ideal: 640}, height: {ideal: 480}}});
   video.srcObject = stream; await video.play(); lastVT = -1;
 }
+let starting = false, flipping = false;
+var paused = false;
 async function startCam(l) {
-  demo = false; facing = SET.facing; camPrep(l);
+  if (starting) return; starting = true;
+  try { await startCamInner(l); } finally { starting = false; }
+}
+async function startCamInner(l) {
+  demo = false; facing = SET.facing; camPrep(l); $('errRetry').style.display = 'none';
   $('demoTag').classList.remove('on'); showOv('errOv', false);
   $('loadTitle').textContent = T('loadCam'); $('loadText').textContent = T('loadCamT'); showOv('loadOv', true);
   try {
@@ -1761,13 +1804,22 @@ async function startCam(l) {
     await openCamera();
   } catch (e) { return camError(e); }
   if (current !== 'cam') { stopCam(); return; }
-  running = true; cancelAnimationFrame(raf); loop();
-  if (!landmarker && !handLandmarker) { $('loadTitle').textContent = T('loadModel'); $('loadText').textContent = T('loadModelT'); }
-  try { await loadModel(); showOv('loadOv', false); }
-  catch (e) { console.error(e); showOv('loadOv', false); $('errTitle').textContent = T('errModel'); $('errText').textContent = T('errModelT'); showOv('errOv', true); }
+  if (document.hidden) { paused = true; if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
+  else { running = true; cancelAnimationFrame(raf); loop(); }
+  await loadEngines();
+}
+async function loadEngines() {
+  if (!landmarker && !handLandmarker) { $('loadTitle').textContent = T('loadModel'); $('loadText').textContent = T('loadModelT'); showOv('loadOv', true); }
+  try {
+    await loadModel(); showOv('loadOv', false);
+    if (!landmarker) toast(T('noBodyEngine'), null, null, 7000); else if (!handLandmarker) toast(T('noHandEngine'), null, null, 7000);
+  } catch (e) {
+    console.error(e); showOv('loadOv', false);
+    $('errTitle').textContent = T('errModel'); $('errText').textContent = T('errModelT'); $('errRetry').style.display = ''; showOv('errOv', true);
+  }
 }
 function camError(e) {
-  console.warn('camera error', e); showOv('loadOv', false);
+  console.warn('camera error', e); showOv('loadOv', false); $('errRetry').style.display = 'none';
   const n = e && e.name, inFrame = window.self !== window.top;
   $('errTitle').textContent = T('errCam');
   $('errText').textContent = n === 'NotAllowedError' ? (inFrame ? T('errFrame') : T('errDenied')) : n === 'NotFoundError' ? T('errNoCam')
@@ -1785,13 +1837,13 @@ function startDemo(l, sc = 'body') {
 function stopCam() {
   running = false; cancelAnimationFrame(raf);
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
-  video.srcObject = null; lm = null; hands = []; demo = false;
+  video.srcObject = null; lm = null; hands = []; demo = false; paused = false;
   showOv('loadOv', false); showOv('errOv', false);
 }
 async function flip() {
-  if (demo) return;
+  if (demo || flipping || starting) return; flipping = true;
   facing = facing === 'environment' ? 'user' : 'environment';
-  try { await openCamera(); lm = null; hands = []; } catch (e) { camError(e); }
+  try { await openCamera(); lm = null; hands = []; } catch (e) { camError(e); } finally { flipping = false; }
 }
 
 /* ---------------- snapshot → gallery ---------------- */
@@ -1805,20 +1857,23 @@ async function snapshot() {
   const now = Date.now(), bh = Math.round(H * .055), fs = Math.round(bh * .38);
   x.fillStyle = 'rgba(0,0,0,.62)'; x.fillRect(0, H - bh, W, bh);
   x.fillStyle = '#ffffff'; x.font = `700 ${fs}px Heebo, sans-serif`; x.textBaseline = 'middle';
-  const parts = ['X·RAY CAM', T(LEVELS[level].name), SET.name.trim(), fmtDate(now)].filter(Boolean);
+  const who = SET.stampName ? SET.name.trim() : '';
+  const parts = ['X·RAY CAM · ' + T('simShort'), T(LEVELS[level].name), who, fmtDate(now)].filter(Boolean);
   x.direction = document.dir; x.textAlign = 'start'; x.fillText(parts.join('  ·  '), document.dir === 'rtl' ? W - fs : fs, H - bh / 2);
   x.textAlign = document.dir === 'rtl' ? 'left' : 'right'; x.fillStyle = '#d4af37'; x.font = `800 ${fs}px Orbitron, sans-serif`;
   x.fillText('AppNest', document.dir === 'rtl' ? fs : W - fs, H - bh / 2);
   const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
   if (!blob) return;
-  const row = {id: 's' + now.toString(36) + Math.random().toString(36).slice(2, 6), blob, caption: T('shotDefault') + ' · ' + T(LEVELS[level].name), created: now, layer: level, by: SET.name.trim()};
-  await DB.put(row); requestPersist();
+  const row = {id: 's' + now.toString(36) + Math.random().toString(36).slice(2, 6), blob, caption: T('shotDefault') + ' · ' + T(LEVELS[level].name), created: now, layer: level, by: who};
+  try { await DB.put(row); }
+  catch (err) { console.warn('save failed', err); toast(saveErrMsg(err), T('download').replace(/^\S+\s/, ''), () => downloadBlob(blob, 'xray-' + now + '.jpg'), 10000); return; }
+  requestPersist(); refreshCount();
   toast(T('saved'), T('share').replace(/^\S+\s/, ''), () => shareShot(row));
 }
 async function shareShot(row) {
   const name = (row.caption || 'xray').replace(/[\\/:*?"<>|]+/g, '_') + '.jpg';
   const file = new File([row.blob], name, {type: 'image/jpeg'});
-  const text = T('shareText') + (SET.name.trim() ? ' · ' + T('by') + ' ' + SET.name.trim() : '');
+  const text = T('shareText') + ' (' + T('simShort') + ')' + (SET.stampName && SET.name.trim() ? ' · ' + T('by') + ' ' + SET.name.trim() : '');
   if (navigator.canShare && navigator.canShare({files: [file]})) { try { await navigator.share({files: [file], title: 'X·RAY CAM', text}); return; } catch (e) { if (e.name === 'AbortError') return; } }
   downloadBlob(row.blob, name);
 }
@@ -1826,16 +1881,17 @@ function downloadBlob(blob, name) { const a = document.createElement('a'); a.hre
 
 /* ---------------- gallery screen ---------------- */
 let urls = [], viewing = null;
-async function refreshCount() { const rows = await DB.all(); $('galCount').textContent = rows.length; return rows; }
+async function refreshCount() { const rows = await DB.all(); $('galCount').textContent = rows ? rows.length : '!'; return rows; }
 async function renderGallery() {
   urls.forEach(u => URL.revokeObjectURL(u)); urls = [];
-  const rows = await refreshCount(), g = $('galGrid'); g.innerHTML = '';
-  $('galEmpty').style.display = rows.length ? 'none' : '';
+  let rows = await refreshCount(); const g = $('galGrid'); g.innerHTML = '';
+  $('galErr').style.display = rows ? 'none' : ''; rows = rows || [];
+  $('galEmpty').style.display = rows.length || $('galErr').style.display === '' ? 'none' : '';
   for (const r of rows) {
     const u = URL.createObjectURL(r.blob); urls.push(u);
     const d = document.createElement('div'); d.className = 'shot'; d.tabIndex = 0; d.setAttribute('role', 'button');
     d.innerHTML = `<img alt="" loading="lazy"><div class="cap"></div><div class="meta"></div><button class="ed" aria-label="${T('edit')}">✏️</button>`;
-    d.querySelector('img').src = u; d.querySelector('.cap').textContent = r.caption; d.querySelector('.meta').textContent = fmtDate(r.created);
+    d.querySelector('img').src = u; d.querySelector('img').alt = r.caption + ', ' + fmtDate(r.created); d.querySelector('.cap').textContent = r.caption; d.querySelector('.meta').textContent = fmtDate(r.created);
     let lp = 0, longed = false;
     d.addEventListener('pointerdown', () => { longed = false; lp = setTimeout(() => { longed = true; navigator.vibrate && SET.vibrate && navigator.vibrate(20); openEdit(r); }, 520); });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => d.addEventListener(ev, () => clearTimeout(lp)));
@@ -1846,7 +1902,7 @@ async function renderGallery() {
   }
 }
 function openViewer(r, u) {
-  viewing = r; $('vImg').src = u; $('vCap').textContent = r.caption;
+  viewing = r; $('vImg').src = u; $('vImg').alt = r.caption; $('vCap').textContent = r.caption;
   $('vMeta').textContent = fmtDate(r.created) + (r.by ? ' · ' + r.by : ''); openModal('mView');
 }
 $('vShare').onclick = () => viewing && shareShot(viewing);
@@ -1854,26 +1910,51 @@ $('vSave').onclick = () => viewing && downloadBlob(viewing.blob, (viewing.captio
 $('vEdit').onclick = () => { const r = viewing; closeModal('mView'); setTimeout(() => openEdit(r), 60); };
 let editing = null;
 function openEdit(r) { editing = r; $('eCap').value = r.caption; openModal('mEdit'); }
-$('eSave').onclick = async () => { if (!editing) return; editing.caption = $('eCap').value.trim() || T('shotDefault'); await DB.put(editing); closeModal('mEdit'); renderGallery(); };
+$('eSave').onclick = async () => { if (!editing) return; const row = Object.assign({}, editing, {caption: $('eCap').value.trim().slice(0, 60) || T('shotDefault')});
+  try { await DB.put(row); } catch (err) { return toast(saveErrMsg(err)); } closeModal('mEdit'); renderGallery(); };
 $('eDel').onclick = async () => {
   const r = editing; closeModal('mEdit');
   await new Promise(res => setTimeout(res, 80));
-  if (await confirmDlg(T('delQ'), T('delT'), T('delYes'))) { await DB.del(r.id); renderGallery(); }
+  if (await confirmDlg(T('delQ'), T('delT'), T('delYes'))) { try { await DB.del(r.id); } catch (err) { toast(saveErrMsg(err)); } renderGallery(); }
 };
 
 /* ---------------- settings screen ---------------- */
 function fillSettings() {
-  $('setName').value = SET.name; $('setHud').checked = SET.hud; $('setVib').checked = SET.vibrate; syncSegs(); applyTheme();
+  $('setName').value = SET.name; $('setStamp').checked = SET.stampName; $('setHud').checked = SET.hud; $('setVib').checked = SET.vibrate; syncSegs(); applyTheme();
   persistLine();
 }
 $('setName').addEventListener('input', e => { SET.name = e.target.value; saveSet(); });
 $('setHud').addEventListener('change', e => { SET.hud = e.target.checked; saveSet(); });
+$('setStamp').addEventListener('change', e => { SET.stampName = e.target.checked; saveSet(); });
 $('setVib').addEventListener('change', e => { SET.vibrate = e.target.checked; saveSet(); });
 async function requestPersist() { try { if (navigator.storage && navigator.storage.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch (e) {} }
-async function persistLine() { let ok = false; try { ok = navigator.storage && await navigator.storage.persisted(); } catch (e) {} $('persistLine').textContent = ok ? T('persistOk') : T('persistNo'); }
+async function persistLine() { let ok = false, use = ''; try { ok = navigator.storage && await navigator.storage.persisted(); const q = await navigator.storage.estimate(); use = ' ' + T('storageUse', {u: (q.usage / 1048576).toFixed(1), f: ((q.quota - q.usage) / 1048576 / 1024).toFixed(1)}); } catch (e) {}
+  $('persistLine').textContent = (ok ? T('persistOk') : T('persistNo')) + use; }
 
 const blobToData = b => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
-const dataToBlob = async d => (await fetch(d)).blob();
+// data: URL → Blob without fetch() (fetching data: is blocked by our CSP connect-src)
+async function dataToBlob(d) {
+  if (typeof d !== 'string') return null;
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,/.exec(d.slice(0, 40)); if (!m) return null;
+  try {
+    const bin = atob(d.slice(m[0].length)); if (bin.length < 200) return null;
+    const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const b = new Blob([u], {type: m[1]});
+    const bmp = await createImageBitmap(b); bmp.close && bmp.close();   // proves it really is a readable image
+    return b;
+  } catch (err) { return null; }
+}
+function cleanSettings(x) {
+  const o = Object.assign({}, DEF, {seenGuide: true});
+  if (!x || typeof x !== 'object') return o;
+  if (typeof x.name === 'string') o.name = x.name.slice(0, 40);
+  const pick = (k, list) => { if (list.includes(x[k])) o[k] = x[k]; };
+  pick('lang', ['he', 'en']); pick('theme', THEMES); pick('mode', ['night', 'day']); pick('facing', ['environment', 'user']);
+  pick('layer', [0, 1, 2, 3]); pick('perf', ['auto', 'quality', 'lite']);
+  for (const k of ['hud', 'vibrate', 'stampName']) if (typeof x[k] === 'boolean') o[k] = x[k];
+  if (Number.isFinite(x.win)) o.win = clamp(Math.round(x.win), 25, 100);
+  return o;
+}
 $('expBtn').onclick = async () => {
   const rows = await DB.all(), shots = [];
   for (const r of rows) shots.push({id: r.id, caption: r.caption, created: r.created, layer: r.layer, by: r.by || '', image: await blobToData(r.blob)});
@@ -1885,20 +1966,33 @@ $('expBtn').onclick = async () => {
 $('impBtn').onclick = () => $('impFile').click();
 $('impFile').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  if (f.size > 400 * 1048576) return toast(T('impTooBig'), null, null, 6000);
   let j; try { j = JSON.parse(await f.text()); } catch (err) { return toast(T('impBad')); }
   if (!j || j.app !== APP_ID || !Array.isArray(j.shots)) return toast(T('impBad'));
-  if (!(await confirmDlg(T('impQ'), T('impT'), T('impYes')))) return;
-  await DB.clear();
-  for (const s of j.shots) { try { await DB.put({id: s.id, caption: s.caption, created: s.created, layer: s.layer, by: s.by, blob: await dataToBlob(s.image)}); } catch (err) {} }
-  SET = Object.assign({}, DEF, j.settings || {}, {seenGuide: true}); saveSet(); applyTheme(); applyLang(); fillSettings();
-  toast(T('impDone') + ` · ${j.shots.length}`);
+  // 1) decode and validate everything BEFORE touching the current gallery
+  const rows = [], ids = new Set(); let bad = 0;
+  for (const x of j.shots) {
+    const blob = x && await dataToBlob(x.image);
+    if (!blob) { bad++; continue; }
+    let id = typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id) ? x.id : 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    while (ids.has(id)) id += 'x'; ids.add(id);
+    rows.push({id, blob, caption: String(x.caption || T('shotDefault')).slice(0, 60), created: Number.isFinite(x.created) ? x.created : Date.now(),
+      layer: [0, 1, 2, 3].includes(x.layer) ? x.layer : 0, by: String(x.by || '').slice(0, 40)});
+  }
+  if (j.shots.length && !rows.length) return toast(T('impNoImages'), null, null, 6000);
+  // 2) ask, with the real numbers
+  if (!(await confirmDlg(T('impQ'), T('impT2', {n: rows.length}) + (bad ? ' ' + T('impBadN', {b: bad}) : ''), T('impYes')))) return;
+  // 3) one atomic swap: if it fails, the old gallery is untouched
+  try { await DB.replaceAll(rows); } catch (err) { console.warn('restore failed', err); return toast(saveErrMsg(err) + ' · ' + T('impKept'), null, null, 7000); }
+  SET = cleanSettings(j.settings); saveSet(); applyTheme(); applyLang(); fillSettings(); refreshCount();
+  toast(T('impDone') + ` · ${rows.length}` + (bad ? ` · ${T('impSkipped', {b: bad})}` : ''), null, null, 6000);
 };
 $('wipeBtn').onclick = async () => {
   if (!(await confirmDlg(T('wipeQ'), T('wipeT'), T('wipeYes')))) return;
   await new Promise(r => setTimeout(r, 120));
   if (!(await confirmDlg(T('wipeQ2'), T('wipeT2'), T('wipeYes2')))) return;
-  await DB.clear(); ['settings', 'errors'].forEach(k => store.del(k));
-  SET = Object.assign({}, DEF, {seenGuide: true, lang: SET.lang}); saveSet(); applyTheme(); applyLang(); fillSettings(); toast(T('wiped'));
+  try { await DB.clear(); } catch (err) { return toast(saveErrMsg(err)); } ['settings', 'errors'].forEach(k => store.del(k));
+  SET = Object.assign({}, DEF, {seenGuide: true, lang: SET.lang}); saveSet(); applyTheme(); applyLang(); fillSettings(); refreshCount(); toast(T('wiped'));
 };
 
 /* ---------------- diagnostics ---------------- */
@@ -1948,6 +2042,7 @@ document.querySelectorAll('.tile').forEach(b => b.addEventListener('click', () =
 $('demoHomeBtn').onclick = () => startDemo(undefined, 'body');
 $('errDemo').onclick = () => startDemo(level, 'body');
 $('errBack').onclick = () => go('home');
+$('errRetry').onclick = () => { showOv('errOv', false); loadEngines(); };
 $('backBtn').onclick = () => { if (history.state && history.state.s === 'cam') history.back(); else go('home'); };
 $('flipBtn').onclick = flip;
 $('shotBtn').onclick = snapshot;
@@ -1960,7 +2055,6 @@ view.addEventListener('pointerdown', e => { dragY = e.clientY; view.setPointerCa
 view.addEventListener('pointermove', e => { if (dragY === null) return; winCY = clamp(winCY + (e.clientY - dragY) / view.clientHeight, .1, .9); dragY = e.clientY; });
 view.addEventListener('pointerup', () => dragY = null);
 view.addEventListener('pointercancel', () => dragY = null);
-let paused = false;
 document.addEventListener('visibilitychange', async () => {
   if (document.hidden && current === 'cam' && !demo && running) { paused = true; running = false; cancelAnimationFrame(raf); if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; } }
   else if (!document.hidden && paused && current === 'cam') { paused = false; try { await openCamera(); running = true; loop(); } catch (e) { camError(e); } }
